@@ -198,15 +198,28 @@ struct win32_window_dimension{
 internal win32_window_dimension Win32GetWindowDimension (HWND Window){
 
     win32_window_dimension Result;
-
+	
+	// RECT is the data format that Windows uses to represent the dimensions of 
+	// a window (HWND) that has been opened. 
+	// v This command v allocates the amount of space needed for that RECT on the stack
     RECT ClientRect;
+	
+	// v This v is a windows.h command that will get the RECT of any given window 
+	// (in our case the window would be "Window").
+	// However, instead of RETURNING the value like any normal function would do, 
+	// this function shoves the value into an already allocated space of memory
+	// (in our case this space of memory would be the one that was created by our 
+	// ^ RECT ClientRect; ^ command above)
     GetClientRect(Window, &ClientRect);
+	
+	// Now we're getting the width and height (which is all we want) from that
+	// RECT
     Result.Width = ClientRect.right - ClientRect.left;
     Result.Height = ClientRect.bottom - ClientRect.top;
-
+	
+	// And now we're returning it
     return (Result);
 }
-
 
 
 
@@ -222,7 +235,7 @@ internal void Win32ResizeDIBSection(win32_offscreen_buffer *Buffer, int Width, i
     }
 
 
-    // Fill out a bunch of fields 
+    // Fill out a bunch of fields
     Buffer->Width = Width;
     Buffer->Height = Height;
     int BytesPerPixel = 4;
@@ -250,6 +263,8 @@ internal void Win32DisplayBufferInWindow(HDC DeviceContext, int WindowWidth, int
     win32_offscreen_buffer *Buffer) {
 
     // TODO: Aspect ratio correction
+	// StretchDIBits takes the color data (what colors the pixels are) of an image
+	// And puts it into a destination 
     StretchDIBits(DeviceContext,
                     0, 0, WindowWidth, WindowHeight,
                     0, 0, Buffer->Width, Buffer->Height,
@@ -337,12 +352,19 @@ LRESULT CALLBACK Win32MainWindowCallback(
 				}	
 			}
 		} break;
+		// WM_PAINT is the event that happens when the window starts to draw. It will rehappen every time
+		// the user messes with the window (resizes it, moves it around, unminimizes it, etc
         case WM_PAINT:{
-            PAINTSTRUCT Paint;
+            
+			// Allocate enough memory for a paintstruct
+			PAINTSTRUCT Paint;
+			
+			// Get the DeviceContext by pointing Windows's BeginPaint function to that PAINTSTRUCT
             HDC DeviceContext = BeginPaint(Window, &Paint);
-
+			
             win32_window_dimension Dimension = Win32GetWindowDimension(Window);
             RECT ClientRect;
+			
             // Get clientrect gives you the coordinates of the window you've created
             GetClientRect(Window, &ClientRect);
 
@@ -459,16 +481,20 @@ int CALLBACK WinMain(
     LPSTR CmdLine, // if any parameters are put in command line when the program is run
     int ShowCode // determines how app window will be displayed
 ) {
+	
+	// This is data for FPS and the like
 	LARGE_INTEGER PerfCountFrequencyResult;
 	QueryPerformanceFrequency(&PerfCountFrequencyResult);
 	int64 PerfCountFrequency = PerfCountFrequencyResult.QuadPart;
 	
+	// This is for getting input from a gamepad
 	Win32LoadXInput();
 	
-    // Allocate the space for a blank Window class in memory
+    Win32ResizeDIBSection(&GlobalBackBuffer, 1280, 720);
+	
+    // Allocate space for a blank Window class in memory
     WNDCLASSA WindowClass = {};
 
-    Win32ResizeDIBSection(&GlobalBackBuffer, 1280, 720);
 
     // Add properties to the Window class
     WindowClass.style = CS_OWNDC|CS_HREDRAW|CS_VREDRAW;
