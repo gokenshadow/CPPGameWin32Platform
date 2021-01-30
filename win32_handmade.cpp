@@ -58,8 +58,14 @@ typedef double real64;
 
 struct win32_offscreen_buffer {
     // NOTE(casey): Pixels are always 32 bits wide, Memory Order BB GG RR XX
-    BITMAPINFO Info;
-    void *Memory;
+	
+	// A DIB is like a BMP, datawise. The BITMAPINFO is a struct that contains stuff about that DIB.
+	// Inside BITMAPINFO is the bmiHeader, which will be very much like the
+	// header of our imaginary BMP, i.e. all the information about how many colors it
+	// will display (8 bit, 16 bit, 32 bit, etc), its width, it's height, etc..
+    BITMAPINFO Info; // it's not really the whole BITMAPINFO we care about, just the header
+    void *Memory; 	// this be the memory where the data of the DIB is stored; 
+	// this ^ variable is not the memory itself, but a pointer to the location of the memory
     int Width;
     int Height;
     int Pitch;
@@ -221,8 +227,7 @@ internal win32_window_dimension Win32GetWindowDimension (HWND Window){
     return (Result);
 }
 
-
-
+// This function is where the allocation of necessary memory for the pixels that go on the screen happens
 internal void Win32ResizeDIBSection(win32_offscreen_buffer *Buffer, int Width, int Height){
     // TODO: Bulletproof this.
     // Maybe don't free first, free after, then free first if that fails.
@@ -246,8 +251,10 @@ internal void Win32ResizeDIBSection(win32_offscreen_buffer *Buffer, int Width, i
     Buffer->Info.bmiHeader.biHeight = -Buffer->Height; //biHeight negative tells Windows top-down, not bottom-up
     Buffer->Info.bmiHeader.biPlanes = 1;
     Buffer->Info.bmiHeader.biBitCount = 32;
-    Buffer->Info.bmiHeader.biCompression = BI_RGB;
+    Buffer->Info.bmiHeader.biCompression = BI_RGB; // No compression
     
+	// Here we are calculating the amount of memory we need in bytes to have in order to fill each pixel,
+	// This will change based on the width and height and bytesperpixel, etc
     int BitmapMemorySize = (Buffer->Width*Buffer->Height)*BytesPerPixel;
     
     // Allocate the memory necessary to draw the entire screen. This will change everytime 
@@ -490,6 +497,8 @@ int CALLBACK WinMain(
 	// This is for getting input from a gamepad
 	Win32LoadXInput();
 	
+	// This allocates the memory needed for the window based on the height
+	// It will currently take the GlobalBackBuffer struct and 
     Win32ResizeDIBSection(&GlobalBackBuffer, 1280, 720);
 	
     // Allocate space for a blank Window class in memory
