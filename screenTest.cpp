@@ -12,10 +12,6 @@ typedef uint32_t uint32;
 struct win32_offscreen_buffer {
     // NOTE(casey): Pixels are always 32 bits wide, Memory Order BB GG RR XX
 	
-	// A DIB is like a BMP, datawise. The BITMAPINFO is a struct that contains stuff about that DIB.
-	// Inside BITMAPINFO is the bmiHeader, which will be very much like the
-	// header of our imaginary BMP, i.e. all the information about how many colors it
-	// will display (8 bit, 16 bit, 32 bit, etc), its width, it's height, etc..
     BITMAPINFO Info; // it's not really the whole BITMAPINFO we care about, just the header
     void *Memory; 	// this be the memory where the data of the DIB is stored; 
 	// the ^ variable is not the memory itself, but a pointer to the location of the memory
@@ -130,7 +126,8 @@ int CALLBACK WinMain(
 	int WindowWidth;
 	int WindowHeight;
 	
-	// Clear the memory in case it has something in it	
+	// We allocated a void pointer to some memory. That memory may currently have something in it from some previous process,
+	// so clear the memory to stop that something from messing with our stuff
 	if(PointerToBackBuffer->Memory){
         VirtualFree(PointerToBackBuffer->Memory, 0, MEM_RELEASE);
     }
@@ -138,18 +135,21 @@ int CALLBACK WinMain(
 	// Set the screen properties (this could probably be set elsewhere, but here it is for now)
 	int ScreenWidth = 1280;
 	int ScreenHeight = 720;
+	int BytesPerPixel = 4;
+    PointerToBackBuffer->Width = ScreenWidth; 
+    PointerToBackBuffer->Height = ScreenHeight; 
+    PointerToBackBuffer->Pitch = ScreenWidth*BytesPerPixel; 
 	
 	// Set the DIB properties
-	int BytesPerPixel = 4;
-    PointerToBackBuffer->Width = ScreenWidth;
-    PointerToBackBuffer->Height = ScreenHeight;
-    PointerToBackBuffer->Pitch = ScreenWidth*BytesPerPixel;
-	PointerToBackBuffer->Info.bmiHeader.biSize = sizeof(PointerToBackBuffer->Info.bmiHeader);
-    PointerToBackBuffer->Info.bmiHeader.biWidth = PointerToBackBuffer->Width;
-    PointerToBackBuffer->Info.bmiHeader.biHeight = -PointerToBackBuffer->Height; //biHeight negative tells Windows top-down, not bottom-up
-    PointerToBackBuffer->Info.bmiHeader.biPlanes = 1;
-    PointerToBackBuffer->Info.bmiHeader.biBitCount = 32;
-    PointerToBackBuffer->Info.bmiHeader.biCompression = BI_RGB; // No compression
+	// A DIB is like a BMP, datawise. The BITMAPINFO is a struct that contains stuff about that DIB.
+	// Inside BITMAPINFO is the bmiHeader, which will be very much like the
+	// header of a BMP in that it gives info about the format of the data, such as...
+	PointerToBackBuffer->Info.bmiHeader.biSize = sizeof(PointerToBackBuffer->Info.bmiHeader); // the size of the header itself
+    PointerToBackBuffer->Info.bmiHeader.biWidth = PointerToBackBuffer->Width; //the width of the DIB
+    PointerToBackBuffer->Info.bmiHeader.biHeight = -PointerToBackBuffer->Height; //the height of the DIB (negative tells Windows to draw top-down, not bottom-up)
+    PointerToBackBuffer->Info.bmiHeader.biPlanes = 1; // The amount of planes in the DIB 
+    PointerToBackBuffer->Info.bmiHeader.biBitCount = 32; // The amount of bits per color in the DIB
+    PointerToBackBuffer->Info.bmiHeader.biCompression = BI_RGB; // the kind of compression the DIB will use (BI_RGB = No compression)
     
 	// Here we are calculating the amount of memory we need in bytes to have in order to fill each pixel,
 	// This will change if the width or height or bytesperpixel are changed
@@ -168,7 +168,7 @@ int CALLBACK WinMain(
     // Add necessary properties to the Window class
     WindowClass.style = CS_OWNDC|CS_HREDRAW|CS_VREDRAW;
 	
-	// This is a reference to that LRESULT CALLBACK Win32MainWindowCallback function we had to create
+	// This is a reference to that LRESULT CALLBACK Win32MainWindowCallback function we had to create above
     WindowClass.lpfnWndProc = Win32MainWindowCallback;
     
 	//WindowClass.cbWndExtra;
@@ -179,7 +179,7 @@ int CALLBACK WinMain(
     // regeister the Window class
     if(RegisterClassA(&WindowClass)){
         
-        // create a window handle
+        // create a window handle, this will create our very own window that we can use for whatever we want
         HWND Window = CreateWindowExA(
             0,                              //dwExstyle
             WindowClass.lpszClassName,      //lpClassName
@@ -196,8 +196,8 @@ int CALLBACK WinMain(
         );
 
         if(Window){
-            // The device context is the place in memory where the drawing will go. 
-			// v This function v will temporarily grab the device context of the Window we've just created, so we can draw into it
+            // The Device Context is the place in memory where the drawing will go. 
+			// v This function v will temporarily grab the Device Context of the Window we've just created, so we can draw into it
             HDC DeviceContext = GetDC(Window);
            
 			// Set up variables to make the weird gradient move
