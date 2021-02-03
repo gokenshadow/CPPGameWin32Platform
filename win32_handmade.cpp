@@ -536,15 +536,16 @@ int CALLBACK WinMain(
 			int16 *Samples = (int16 *)VirtualAlloc(0, SoundOutput.SecondaryBufferSize, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
 			
 #if HANDMADE_INTERNAL
-			LPVOID BaseAddress = (LPVOID)Terrabytes((uint64)2);			
+			LPVOID BaseAddress = (LPVOID)Terrabytes(2);			
 #else
 			LPVOID BaseAddress = 0;
 #endif
 			
 			game_memory GameMemory = {};
 			GameMemory.PermanentStorageSize = Megabytes(64);
-			GameMemory.TransientStorageSize = Gigabytes((uint64)1);
+			GameMemory.TransientStorageSize = Gigabytes(1);
 			
+			// TODO (casey): Handle various memory footprints (USING SYSTEM METRUCS)
 			uint64 TotalSize = GameMemory.PermanentStorageSize + GameMemory.TransientStorageSize;
 			GameMemory.PermanentStorage = VirtualAlloc(BaseAddress, TotalSize, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
 			GameMemory.TransientStorage = ((uint8 *)GameMemory.PermanentStorage + GameMemory.PermanentStorageSize);

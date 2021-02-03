@@ -115,7 +115,7 @@ int CALLBACK WinMain(
     HINSTANCE PrevInstance, // null
     LPSTR CmdLine, // if any parameters are put in command line when the program is run
     int ShowCode // determines how app window will be displayed
-) {	
+) {
 	// SET UP THE DIB
 	// ---------------
 	// ---------------
@@ -162,7 +162,7 @@ int CALLBACK WinMain(
 	// OPEN A WINDOWS WINDOW
 	// ---------------
 	// ---------------
-    // Allocate space for a blank Window class in memory
+    // Allocate space for a blank Window class on the stack
     WNDCLASSA WindowClass = {};
 
     // Add necessary properties to the Window class

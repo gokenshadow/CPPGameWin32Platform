@@ -17,16 +17,17 @@
 // {*(int *)0 = 25;} is writing the value 25 to the null ptr 
 // (address 0 aka 0x00000000), which is an illegal thing to do and will 
 // crash the code, giving an error in the debugger
+// TODO(casey): Complete Assertion macro - don't worry everyone!
 #define Assert(Expression) if(!(Expression)) {*(int *)0 = 25;}
 #else
 #define Assert(Expression)
 #endif
 
 // TODO(casey): Should these always be 64 bit?
-#define Kilobytes(Value) ((Value)*1024)
-#define Megabytes(Value) (Kilobytes(Value)*1024)
-#define Gigabytes(Value) (Megabytes(Value)*1024)
-#define Terrabytes(Value) (Gigabytes(Value)*1024)
+#define Kilobytes(Value) ((Value)*1024LL)
+#define Megabytes(Value) (Kilobytes(Value)*1024LL)
+#define Gigabytes(Value) (Megabytes(Value)*1024LL)
+#define Terrabytes(Value) (Gigabytes(Value)*1024LL)
 
 #define ArrayCount(Array) (sizeof(Array) / sizeof((Array)[0]))
 // TODO(Casey): swap, min, max ... macros???
