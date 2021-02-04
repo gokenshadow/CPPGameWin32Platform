@@ -87,9 +87,60 @@ global_variable x_input_set_state *XInputSetState_ = XInputSetStateStub;
 typedef DIRECT_SOUND_CREATE(direct_sound_create);
 
 
-void * PlatformLoadFile(char *FileName) {
-	//NOTE(casey): Implements the Win32 file loading
-	return(0);
+internal debug_read_file_result DEBUGPlatformReadEntireFile(char *Filename) {
+	
+	debug_read_file_result Result = {};
+	// handle = usually indexes to a table, pointer into Kernel memory
+	HANDLE FileHandle = CreateFileA(Filename, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
+	if(FileHandle != INVALID_HANDLE_VALUE) {
+		LARGE_INTEGER FileSize;
+		if(GetFileSizeEx(FileHandle, &FileSize)) {
+			uint32 FileSize32 = SafeTruncateSize64(FileSize.QuadPart);
+			Result.Contents = VirtualAlloc(0, FileSize32, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+			if(Result.Contents) {
+				DWORD BytesRead;
+				if(ReadFile(FileHandle, Result.Contents, FileSize32, &BytesRead, 0) 
+					&&FileSize32==BytesRead) {
+					// Note(casey): File read successfully
+					Result.ContentSize = FileSize32;
+				} else {
+					// TODO(casey): Logging
+					DEBUGPlatformFreeFileMemory(Result.Contents);
+					Result.Contents = 0;
+				}
+			} else {
+				// TODO(casey): Logging
+			}
+		} else {
+			// TODO(casey): Logging
+		}
+		
+		CloseHandle(FileHandle);
+	}
+	return(Result);
+}
+
+internal void DEBUGPlatformFreeFileMemory(void *Memory) {
+	if(Memory) {
+		VirtualFree(Memory, 0, MEM_RELEASE);
+	}
+}
+internal bool32 DEBUGPlatformWriteEntireFile(char *Filename, uint32 MemorySize, void *Memory) {
+	bool32 Result = false;
+	// handle = usually indexes to a table, pointer into Kernel memory
+	HANDLE FileHandle = CreateFileA(Filename, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0);
+	if(FileHandle != INVALID_HANDLE_VALUE) {
+		DWORD BytesWritten;
+		if(WriteFile(FileHandle, Memory, MemorySize, &BytesWritten, 0)) {
+			// Note(casey): File written successfully
+			Result = (BytesWritten == MemorySize);
+		} else {
+			// TODO(casey): Logging
+		}
+		
+		CloseHandle(FileHandle);
+	}
+	return(Result);
 }
 
 

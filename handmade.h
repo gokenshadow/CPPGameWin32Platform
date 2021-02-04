@@ -12,6 +12,7 @@
 		1 - Slow code welcome.
 */
 
+
 #if HANDMADE_SLOW
 // v This macro v purposefully stops the program if the Expression is false. 
 // {*(int *)0 = 25;} is writing the value 25 to the null ptr 
@@ -31,10 +32,31 @@
 
 #define ArrayCount(Array) (sizeof(Array) / sizeof((Array)[0]))
 // TODO(Casey): swap, min, max ... macros???
+inline uint32 SafeTruncateSize64(uint64 Value) {
+	//TODO(casey): Defines for maximum values
+	Assert(Value <= 0xFFFFFF);
+	uint32 Result = (uint32)Value;
+	return Result;
+}
 
 /*
 	TODO(casey): Services that the game provides to the platform layer.
 */
+#if HANDMADE_INTERNAL
+/* IMPORTANT(casey):
+
+	These are NOT for doing anything in the shipping game - they are blocking
+	and the write doesn't protect against lost data!
+*/
+struct debug_read_file_result {
+	uint32 ContentSize;
+	void *Contents;
+};
+internal debug_read_file_result DEBUGPlatformReadEntireFile(char *Filename);
+internal void DEBUGPlatformFreeFileMemory(void *Memory);
+internal bool32 DEBUGPlatformWriteEntireFile(char *Filename, uint32 MemorySize, void *Memory);
+#endif
+
 
 /*
 	NOTE(casey): Services that the platform layer provides to the game
