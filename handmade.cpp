@@ -51,6 +51,7 @@ internal void GameOutputSound(game_sound_output_buffer *SoundBuffer, int ToneHz)
 internal void GameUpdateAndRender(game_memory *Memory, game_input *Input, game_offscreen_buffer *Buffer, 
 								  game_sound_output_buffer *SoundBuffer) {
 	Assert(sizeof(game_state) <= Memory->PermanentStorageSize);
+	Assert((&Input->Controllers[0].Terminator - &Input->Controllers[0].Buttons[0]) == ArrayCount(Input->Controllers[0].Buttons));
 	game_state *GameState = (game_state *)Memory->PermanentStorage;
 	if(!Memory->IsInitialized) {
 		
@@ -68,20 +69,27 @@ internal void GameUpdateAndRender(game_memory *Memory, game_input *Input, game_o
 		// TODO(casey): This may be more appropriate to do in the platform layer 
 		Memory->IsInitialized = true;
 	}
-	
-	game_controller_input *Input0 = &Input->Controllers[0];
-	if(Input0->IsAnalog){
-		// NOTE:(casey) Use analoy movement tuning
-		GameState->BlueOffset += (int)(4.0f*(Input0->EndX));
-		GameState->ToneHz = 256 + (int)(128.0f*(Input0->EndY));
-	} else {
-		// Use digital movement tuning
-	}
-	
-	//Input.AButtonEndedDown;
-	//Input.AButtonHalfTransitionCount;
-	if(Input0->Down.EndedDown) {
-		GameState->GreenOffset += 1;
+	for (int ControllerIndex = 0; ControllerIndex < ArrayCount(Input->Controllers); ++ControllerIndex) {
+		game_controller_input *Controller = GetController(Input, ControllerIndex);
+		if(Controller->IsAnalog){
+			// NOTE:(casey) Use analoy movement tuning
+			GameState->BlueOffset += (int)(4.0f*(Controller->StickAverageX));
+			GameState->ToneHz = 256 + (int)(128.0f*(Controller->StickAverageY));
+		} else {
+			if(Controller->MoveLeft.EndedDown) {
+				GameState->BlueOffset -= 2;
+			}
+			if (Controller->MoveRight.EndedDown) {
+				GameState->BlueOffset += 2;
+			} 
+			// Use digital movement tuning
+		}
+		
+		//Input.AButtonEndedDown;
+		//Input.AButtonHalfTransitionCount;
+		if(Controller->ActionDown.EndedDown) {
+			GameState->GreenOffset += 1;
+		}		
 	}
 	
 	
