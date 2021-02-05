@@ -1,6 +1,6 @@
  win32_handmade
 
- Timestamp is 601c9cee (Thu Feb  4 20:18:38 2021)
+ Timestamp is 601ca00b (Thu Feb  4 20:31:55 2021)
 
  Preferred load address is 00400000
 
@@ -54,10 +54,10 @@
  0000:00000003       ___safe_se_handler_count   00000003     <absolute>
  0000:00000100       ___guard_flags             00000100     <absolute>
  0000:00000000       ___ImageBase               00400000     <linker-defined>
- 0001:00005c40       _WinMain@16                00406c40 f   win32_handmade.obj
- 0001:000066e0       ?XInputGetStateStub@@YGKKPAU_XINPUT_STATE@@@Z 004076e0 f   win32_handmade.obj
- 0001:000066f0       ?XInputSetStateStub@@YGKKPAU_XINPUT_VIBRATION@@@Z 004076f0 f   win32_handmade.obj
- 0001:00006a70       ?Win32MainWindowCallback@@YGJPAUHWND__@@IIJ@Z 00407a70 f   win32_handmade.obj
+ 0001:00005c30       _WinMain@16                00406c30 f   win32_handmade.obj
+ 0001:000066d0       ?XInputGetStateStub@@YGKKPAU_XINPUT_STATE@@@Z 004076d0 f   win32_handmade.obj
+ 0001:000066e0       ?XInputSetStateStub@@YGKKPAU_XINPUT_VIBRATION@@@Z 004076e0 f   win32_handmade.obj
+ 0001:00006a60       ?Win32MainWindowCallback@@YGJPAUHWND__@@IIJ@Z 00407a60 f   win32_handmade.obj
  0001:000078d0       ??$__vcrt_va_start_verify_argument_type@QBD@@YAXXZ 004088d0 f i win32_handmade.obj
  0001:000078e0       ?SafeTruncateSize64@@YAI_K@Z 004088e0 f i win32_handmade.obj
  0001:00007920       ___local_stdio_printf_options 00408920 f i win32_handmade.obj

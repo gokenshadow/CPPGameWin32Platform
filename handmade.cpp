@@ -68,21 +68,20 @@ internal void GameUpdateAndRender(game_memory *Memory, game_input *Input, game_o
 		// TODO(casey): This may be more appropriate to do in the platform layer 
 		Memory->IsInitialized = true;
 	}
-	for (int ControllerIndex = 0; ControllerIndex < ArrayCount(Input->Controllers); ++ControllerIndex) {
-		game_controller_input *Controller = &Input->Controllers[ControllerIndex];
-		if(Controller->IsAnalog){
-			// NOTE:(casey) Use analoy movement tuning
-			GameState->BlueOffset += (int)(4.0f*(Controller->EndX));
-			GameState->ToneHz = 256 + (int)(128.0f*(Controller->EndY));
-		} else {
-			// Use digital movement tuning
-		}
-		
-		//Input.AButtonEndedDown;
-		//Input.AButtonHalfTransitionCount;
-		if(Controller->Down.EndedDown) {
-			GameState->GreenOffset += 1;
-		}		
+	
+	game_controller_input *Input0 = &Input->Controllers[0];
+	if(Input0->IsAnalog){
+		// NOTE:(casey) Use analoy movement tuning
+		GameState->BlueOffset += (int)(4.0f*(Input0->EndX));
+		GameState->ToneHz = 256 + (int)(128.0f*(Input0->EndY));
+	} else {
+		// Use digital movement tuning
+	}
+	
+	//Input.AButtonEndedDown;
+	//Input.AButtonHalfTransitionCount;
+	if(Input0->Down.EndedDown) {
+		GameState->GreenOffset += 1;
 	}
 	
 	
