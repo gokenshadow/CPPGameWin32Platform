@@ -1,3 +1,3 @@
-call "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat"
+call "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat" x86
 start /d "C:\Program Files\Notepad++\" notepad++.exe
 cd "C:\Users\goken\cppProjects\HandmadeHero"

@@ -150,12 +150,12 @@ internal void Win32LoadXInput(void){
 	if(!XInputLibrary)
 	{
 		//TODO(casey): Diagnostic
-		HMODULE XInputLibrary = LoadLibraryA("XInput9_1_0.dll");
+		XInputLibrary = LoadLibraryA("XInput9_1_0.dll");
 	}
 	if(!XInputLibrary)
 	{
 		//TODO(casey): Diagnostic
-		HMODULE XInputLibrary = LoadLibraryA("xinput1_3.dll");
+		XInputLibrary = LoadLibraryA("xinput1_3.dll");
 	}
 	if(XInputLibrary){
 		XInputGetState = (x_input_get_state *)GetProcAddress(XInputLibrary, "XInputGetState");
@@ -349,48 +349,7 @@ LRESULT CALLBACK Win32MainWindowCallback(
 		case WM_SYSKEYUP:
 		case WM_KEYDOWN:
 		case WM_KEYUP:{
-			uint32 VKCode = WParam;
-			bool WasDown = ((LParam & (1 << 30)) != 0);
-			bool IsDown = ((LParam & (1<< 31)) == 0);
-			
-			if(WasDown != IsDown) {
-				if(VKCode == 'W') {
-					
-				} else if (VKCode == 'A') {
-					
-				} else if (VKCode == 'S') {
-					
-				} else if (VKCode =='D') {
-					
-				} else if (VKCode == 'A') {
-					
-				} else if (VKCode == 'E') {
-					
-				} else if (VKCode == VK_UP) {
-					
-				} else if (VKCode == VK_DOWN) {
-					
-				} else if (VKCode == VK_RIGHT) {
-					
-				} else if (VKCode == VK_LEFT) {
-					
-				} else if (VKCode == VK_ESCAPE) {
-					printf("ESCAPE: ");
-					if(IsDown) {
-						uint32 VKCode = WParam;						
-						GlobalRunning = false;
-						PostQuitMessage(0);					
-					}
-					if(WasDown) {
-					}
-				} else if (VKCode == VK_SPACE) {
-					
-				}
-				bool AltKeyWasDown = ((LParam & (1 << 29)) != 0);
-				if ((VKCode == VK_F4) && AltKeyWasDown){
-					GlobalRunning = false;
-				}	
-			}
+			Assert(!"Keyboard came in through a non-dispatch message!");
 		} break;
 		// WM_PAINT is the event that happens when the window starts to draw. It will rehappen every time
 		// the user messes with the window (resizes it, moves it around, unminimizes it, etc
@@ -497,10 +456,80 @@ internal void Win32FillSoundBuffer (win32_sound_output *SoundOutput, DWORD ByteT
 	}
 }
 
+internal void Win32ProcessKeyboardMessage (game_button_state *NewState, bool32 IsDown) {
+	NewState->EndedDown = IsDown; 
+	++NewState->HalfTransitionCount;
+}
+
 internal void Win32ProcessXInputDigitalButtton (DWORD XInputButtonState, game_button_state *OldState, 
 												DWORD ButtonBit, game_button_state *NewState) {
 	NewState->EndedDown = ((XInputButtonState & ButtonBit) == ButtonBit);
 	NewState->HalfTransitionCount = (OldState->EndedDown != NewState->EndedDown) ? 1 : 0;
+}
+
+internal void Win32ProcessHandlingMessages (game_controller_input *KeyboardController){
+	// The GetMessage() function will reach into the inards of the window handle we just
+	// created and grab whatever message (eg window resize, window close, etc..) is queued 
+	// up next. It will then send the raw data of that message to the memory we allocated 
+	// for the MSG structure above 
+	MSG Message;
+	while(PeekMessage(&Message,0,0,0,PM_REMOVE)){
+		switch(Message.message) {
+			case WM_QUIT: {
+				GlobalRunning = false;
+			} break;
+			
+			case WM_SYSKEYDOWN:
+			case WM_SYSKEYUP:
+			case WM_KEYDOWN:
+			case WM_KEYUP:{ 
+				uint32 VKCode = (uint32)Message.wParam;
+				bool WasDown = ((Message.lParam & (1 << 30)) != 0);
+				bool IsDown = ((Message.lParam & (1<< 31)) == 0);			
+				if(WasDown != IsDown) {
+					if(VKCode == 'W') {
+						Win32ProcessKeyboardMessage (&KeyboardController->Up, IsDown);
+					} else if (VKCode == 'A') {
+						Win32ProcessKeyboardMessage (&KeyboardController->Left, IsDown);
+					} else if (VKCode == 'S') {
+						Win32ProcessKeyboardMessage (&KeyboardController->Down, IsDown);
+					} else if (VKCode =='D') {
+						Win32ProcessKeyboardMessage (&KeyboardController->Right, IsDown);
+					} else if (VKCode == 'Q') {
+						Win32ProcessKeyboardMessage (&KeyboardController->LeftShoulder, IsDown);
+					} else if (VKCode == 'E') {
+						Win32ProcessKeyboardMessage (&KeyboardController->RightShoulder, IsDown);
+					} else if (VKCode == VK_UP) {
+						
+					} else if (VKCode == VK_DOWN) {
+						
+					} else if (VKCode == VK_RIGHT) {
+						
+					} else if (VKCode == VK_LEFT) {
+						
+					} else if (VKCode == VK_ESCAPE) {
+						printf("ESCAPE: ");
+							GlobalRunning = false;
+						if(WasDown) {
+						}
+					} else if (VKCode == VK_SPACE) {
+						
+					}
+					bool AltKeyWasDown = ((Message.lParam & (1 << 29)) != 0);
+					if ((VKCode == VK_F4) && AltKeyWasDown){
+						GlobalRunning = false;
+					}	
+				}
+			
+			} break;
+			
+			default: {
+				TranslateMessage(&Message);
+				DispatchMessage(&Message);								
+			} break;
+		}
+	}
+	
 }
 
 // This is the main function where the program begins. This program uses the WinMain()
@@ -598,7 +627,7 @@ int CALLBACK WinMain(
 			
 			// TODO (casey): Handle various memory footprints (USING SYSTEM METRUCS)
 			uint64 TotalSize = GameMemory.PermanentStorageSize + GameMemory.TransientStorageSize;
-			GameMemory.PermanentStorage = VirtualAlloc(BaseAddress, TotalSize, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+			GameMemory.PermanentStorage = VirtualAlloc(BaseAddress, (SIZE_T)TotalSize, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
 			GameMemory.TransientStorage = ((uint8 *)GameMemory.PermanentStorage + GameMemory.PermanentStorageSize);
 			
 			if(Samples && GameMemory.PermanentStorage && GameMemory.TransientStorage) {
@@ -611,24 +640,17 @@ int CALLBACK WinMain(
 				LARGE_INTEGER LastCounter;
 				QueryPerformanceCounter(&LastCounter);
 				uint64 LastCycleCount = __rdtsc();
-				while(GlobalRunning){
-					// Allocate enough memory for a MSG structure, so we can place the stuff GetMessage() 
-					// spits out into it
-					 MSG Message;
-
-					// The GetMessage() function will reach into the inards of the window handle we just
-					// created and grab whatever message (eg window resize, window close, etc..) is queued 
-					// up next. It will then send the raw data of that message to the memory we allocated 
-					// for the MSG structure above 
-					while(PeekMessage(&Message,0,0,0,PM_REMOVE)){
-						if(Message.message == WM_QUIT){
-							GlobalRunning = false;
-						}
-						TranslateMessage(&Message);
-						DispatchMessage(&Message);
-					}
+				while(GlobalRunning){	
+					game_controller_input *KeyboardController = &NewInput-> Controllers[0];
+					
+					// TODO(casey): Zeroing Macro
+					// TODO(casey): We can't zero everything because the up/down state will be wrong!!
+					game_controller_input ZeroController = {};
+					*KeyboardController = ZeroController;
+					Win32ProcessHandlingMessages(KeyboardController);
+						
 					// TODO:(casey): Should we pull this more frequently?
-					int MaxControllerCount = XUSER_MAX_COUNT;
+					DWORD MaxControllerCount = XUSER_MAX_COUNT;
 					if(MaxControllerCount > ArrayCount(NewInput->Controllers)){
 						MaxControllerCount = ArrayCount(NewInput->Controllers);
 					}
@@ -644,10 +666,10 @@ int CALLBACK WinMain(
 							XINPUT_GAMEPAD *Pad = &ControllerState.Gamepad;
 							
 							// TODO(casey): DPad
-							bool Up = (Pad->wButtons & XINPUT_GAMEPAD_DPAD_UP);
-							bool Down = (Pad->wButtons & XINPUT_GAMEPAD_DPAD_DOWN);
-							bool Left = (Pad->wButtons & XINPUT_GAMEPAD_DPAD_LEFT);
-							bool Right = (Pad->wButtons & XINPUT_GAMEPAD_DPAD_RIGHT);
+							bool32 Up = (Pad->wButtons & XINPUT_GAMEPAD_DPAD_UP);
+							bool32 Down = (Pad->wButtons & XINPUT_GAMEPAD_DPAD_DOWN);
+							bool32 Left = (Pad->wButtons & XINPUT_GAMEPAD_DPAD_LEFT);
+							bool32 Right = (Pad->wButtons & XINPUT_GAMEPAD_DPAD_RIGHT);
 							
 							NewController->IsAnalog = true;
 							NewController->StartX = OldController->EndX;

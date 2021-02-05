@@ -47,6 +47,7 @@ LRESULT CALLBACK Win32MainWindowCallback(
         case WM_DESTROY:
         {
             GlobalRunning = false;
+			PostQuitMessage(0);
         } break;
         case WM_CLOSE:
         {
@@ -219,8 +220,48 @@ int CALLBACK WinMain(
                     if(Message.message == WM_QUIT){
                         GlobalRunning = false;
                     }
-                    TranslateMessage(&Message);
-                    DispatchMessage(&Message);
+					
+					// FUN KEYBOARD STUFF
+					switch(Message.message) {
+						case WM_SYSKEYDOWN:
+						case WM_SYSKEYUP:
+						case WM_KEYDOWN:
+						case WM_KEYUP:{ 
+							uint32 VKCode = (uint32)Message.wParam;
+							bool WasDown = ((Message.lParam & (1 << 30)) != 0);
+							bool IsDown = ((Message.lParam & (1<< 31)) == 0);			
+							if(WasDown != IsDown) {
+								if(VKCode == 'W') {
+									
+								} else if (VKCode == 'A') {
+								} else if (VKCode == 'S') {
+								} else if (VKCode =='D') {
+								} else if (VKCode == 'Q') {
+								} else if (VKCode == 'E') {
+								} else if (VKCode == VK_UP) {
+									YOffset+=40;
+								} else if (VKCode == VK_DOWN) {
+									YOffset-=40;
+								} else if (VKCode == VK_RIGHT) {
+								} else if (VKCode == VK_LEFT) {
+								} else if (VKCode == VK_ESCAPE) {
+									GlobalRunning = false;
+								} else if (VKCode == VK_SPACE) {
+								}
+								bool AltKeyWasDown = ((Message.lParam & (1 << 29)) != 0);
+								if ((VKCode == VK_F4) && AltKeyWasDown){
+									GlobalRunning = false;
+									PostQuitMessage(0);
+								}	
+							}
+						
+						} break;
+						
+						default: {
+								TranslateMessage(&Message);
+								DispatchMessage(&Message);								
+						} break;
+					}
                 }
 				
 				

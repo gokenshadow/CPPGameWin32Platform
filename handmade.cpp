@@ -12,9 +12,9 @@ internal void RenderWeirdGradient (game_offscreen_buffer *Buffer, int XOffset, i
 
                 0x xxBBGGRR 
             */
-           uint8 Blue = (X + XOffset);
-           uint8 Green = (Y + YOffset);
-		   uint8 Red = 	(X + XOffset);
+           uint8 Blue = (uint8)(X + XOffset);
+           uint8 Green = (uint8)(Y + YOffset);
+		   uint8 Red = 	(uint8)(X + XOffset);
 
            /*
             Memory:     BB GG RR xx
@@ -68,20 +68,21 @@ internal void GameUpdateAndRender(game_memory *Memory, game_input *Input, game_o
 		// TODO(casey): This may be more appropriate to do in the platform layer 
 		Memory->IsInitialized = true;
 	}
-	
-	game_controller_input *Input0 = &Input->Controllers[0];
-	if(Input0->IsAnalog){
-		// NOTE:(casey) Use analoy movement tuning
-		GameState->BlueOffset += (int)4.0f*(Input0->EndX);
-		GameState->ToneHz = 256 + (int)(128.0f*(Input0->EndY));
-	} else {
-		// Use digital movement tuning
-	}
-	
-	//Input.AButtonEndedDown;
-	//Input.AButtonHalfTransitionCount;
-	if(Input0->Down.EndedDown) {
-		GameState->GreenOffset += 1;
+	for (int ControllerIndex = 0; ControllerIndex < ArrayCount(Input->Controllers); ++ControllerIndex) {
+		game_controller_input *Controller = &Input->Controllers[ControllerIndex];
+		if(Controller->IsAnalog){
+			// NOTE:(casey) Use analoy movement tuning
+			GameState->BlueOffset += (int)(4.0f*(Controller->EndX));
+			GameState->ToneHz = 256 + (int)(128.0f*(Controller->EndY));
+		} else {
+			// Use digital movement tuning
+		}
+		
+		//Input.AButtonEndedDown;
+		//Input.AButtonHalfTransitionCount;
+		if(Controller->Down.EndedDown) {
+			GameState->GreenOffset += 1;
+		}		
 	}
 	
 	
