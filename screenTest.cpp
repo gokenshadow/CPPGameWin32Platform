@@ -204,6 +204,9 @@ int CALLBACK WinMain(
 			// Set up variables to make the weird gradient move
 			int XOffset = 0;
             int YOffset = 0;
+			int XSpeed = 0;
+			int YSpeed = 0;
+			int Speed = 2;
 			
             GlobalRunning = true;
 			
@@ -229,7 +232,7 @@ int CALLBACK WinMain(
 						case WM_KEYUP:{ 
 							uint32 VKCode = (uint32)Message.wParam;
 							bool WasDown = ((Message.lParam & (1 << 30)) != 0);
-							bool IsDown = ((Message.lParam & (1<< 31)) == 0);			
+							bool IsDown = ((Message.lParam & (1<< 31)) == 0);
 							if(WasDown != IsDown) {
 								if(VKCode == 'W') {
 									
@@ -239,11 +242,25 @@ int CALLBACK WinMain(
 								} else if (VKCode == 'Q') {
 								} else if (VKCode == 'E') {
 								} else if (VKCode == VK_UP) {
-									YOffset+=40;
+									if(WasDown)
+										YSpeed=0;
+									if(IsDown)
+										YSpeed=-Speed;
 								} else if (VKCode == VK_DOWN) {
-									YOffset-=40;
+									if(WasDown)
+										YSpeed=0;
+									if(IsDown)
+										YSpeed=Speed;
 								} else if (VKCode == VK_RIGHT) {
+									if(WasDown)
+										XSpeed=0;
+									if(IsDown)
+										XSpeed=Speed;
 								} else if (VKCode == VK_LEFT) {
+									if(WasDown)
+										XSpeed=0;
+									if(IsDown)
+										XSpeed=-Speed;
 								} else if (VKCode == VK_ESCAPE) {
 									GlobalRunning = false;
 								} else if (VKCode == VK_SPACE) {
@@ -311,7 +328,7 @@ int CALLBACK WinMain(
 				WindowWidth = ClientRect.right - ClientRect.left;
 				WindowHeight = ClientRect.bottom - ClientRect.top;
 				
-				// StretchDIBits takes the color data (what colors the pixels are) of an image
+				// StretchDIBits takes the color data (what colors the individual pixels are) of an image
 				// And puts it into a destination 
 				StretchDIBits(DeviceContext,
 								0, 0, WindowWidth, WindowHeight,
@@ -323,8 +340,8 @@ int CALLBACK WinMain(
 								);
 				
 				// Move the weird gradient from Right to left
-				XOffset++;
-				//YOffset++;
+				XOffset+=XSpeed;
+				YOffset+=YSpeed;
 				
 				// It is said that if you Get a DC, you must release it when you're done with it. I have no idea why.
 				ReleaseDC(Window, DeviceContext);
