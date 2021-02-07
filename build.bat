@@ -1,6 +1,7 @@
 @echo off
 rem #pushd build
 rem #g++ ..\win32_handmade.cpp -o HandmadeHero.exe -L MinGW\lib -lgdi32
+rem g++ screenTest.cpp -o ScreenTest.exe -L MinGW\lib -lgdi32
 rem #popd
 REM TODO - can we just build both with one exe?
 

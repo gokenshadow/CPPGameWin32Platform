@@ -87,7 +87,6 @@ global_variable x_input_set_state *XInputSetState_ = XInputSetStateStub;
 #define DIRECT_SOUND_CREATE(name) HRESULT WINAPI name(LPCGUID pcGuideDevice, LPDIRECTSOUND *ppDS, LPUNKNOWN pUnkOuter)
 typedef DIRECT_SOUND_CREATE(direct_sound_create);
 
-
 internal debug_read_file_result DEBUGPlatformReadEntireFile(char *Filename) {
 	
 	debug_read_file_result Result = {};
@@ -614,14 +613,12 @@ int CALLBACK WinMain(
 	// This is for getting input from a gamepad
 	Win32LoadXInput();
 	
-	// This allocates the memory needed for the window based on the height
-	// It will currently take the GlobalBackBuffer struct and 
+	// This allocates the memory needed for the window based on the width and height
     Win32ResizeDIBSection(&GlobalBackBuffer, 1280, 720);
 	
     // Allocate space for a blank Window class in memory
     WNDCLASSA WindowClass = {};
-
-
+	
     // Add properties to the Window class
     WindowClass.style = CS_OWNDC|CS_HREDRAW|CS_VREDRAW;
     WindowClass.lpfnWndProc = Win32MainWindowCallback;
