@@ -25,6 +25,7 @@ typedef double real64;
 
 // This will allow you to use Microsoft's direct sound definitions
 #include "mingwdsound.h"
+#include "mingwxinput.h"
 //#include <dsound.h>
 
 struct win32_offscreen_buffer {
@@ -47,6 +48,24 @@ static win32_offscreen_buffer GlobalBackBuffer;
 static LPDIRECTSOUNDBUFFER GlobalSoundBuffer;
 
 static void *GlobalDibMemory;
+
+// NOTE(Casey): XInputGetState
+#define X_INPUT_GET_STATE(name) DWORD WINAPI name(DWORD dwUserIndex, XINPUT_STATE *pState)
+typedef X_INPUT_GET_STATE(x_input_get_state);
+X_INPUT_GET_STATE(XInputGetStateStub){
+	return(ERROR_DEVICE_NOT_CONNECTED);
+}
+static x_input_get_state *XInputGetState_ = XInputGetStateStub;
+#define XInputGetState XInputGetState_
+
+// NOTE(Casey): XInputSetState
+#define X_INPUT_SET_STATE(name) DWORD WINAPI name(DWORD dwUserIndex, XINPUT_VIBRATION *pVibration)
+typedef X_INPUT_SET_STATE(x_input_set_state);
+X_INPUT_SET_STATE(XInputSetStateStub){
+	return(ERROR_DEVICE_NOT_CONNECTED);
+}
+static x_input_set_state *XInputSetState_ = XInputSetStateStub;
+#define XInputSetState XInputSetState_
 
 // This is totally hacky way to be able to use the direct sound DLL without having to use the direct sound library
 #define DIRECT_SOUND_CREATE(name) HRESULT WINAPI name(LPCGUID pcGuideDevice, LPDIRECTSOUND *ppDS, LPUNKNOWN pUnkOuter)
@@ -148,6 +167,25 @@ int CALLBACK WinMain(
 	// Hide the console (Windows XP shows the console even though this is a WinMain function when it's compiled with MinGW)
 	::ShowWindow(::GetConsoleWindow(), SW_HIDE);
 	
+	// SET UP THE GAMEPAD
+	// ---------------
+	// ---------------
+	HMODULE XInputLibrary = LoadLibraryA("xinput1_4.dll");
+	if(!XInputLibrary)
+	{
+		XInputLibrary = LoadLibraryA("XInput9_1_0.dll");
+	}
+	if(!XInputLibrary)
+	{
+		XInputLibrary = LoadLibraryA("xinput1_3.dll");
+	}
+	if(XInputLibrary){
+		XInputGetState = (x_input_get_state *)GetProcAddress(XInputLibrary, "XInputGetState");
+		XInputSetState = (x_input_set_state *)GetProcAddress(XInputLibrary, "XInputSetState");
+	} else {
+		
+	}
+
 	// SET UP THE DIB
 	// ---------------
 	// ---------------
@@ -359,6 +397,7 @@ int CALLBACK WinMain(
 			int XSpeed = 0;
 			int YSpeed = 0;
 			int Speed = 2;
+			int ToneHz = 256;
 			
 			
 			// START THE PROGRAM LOOP
@@ -439,7 +478,76 @@ int CALLBACK WinMain(
 					}
                 }
 				
+				// HANDLE JOYPAD INPUT
+				// ---------------
+				// ---------------
+				XINPUT_STATE ControllerState;
+				if(XInputGetState(0, &ControllerState) == ERROR_SUCCESS){ 
+					XINPUT_GAMEPAD *Pad = &ControllerState.Gamepad;
+					
+					// DPad Buttons
+					if(Pad->wButtons&XINPUT_GAMEPAD_DPAD_UP) {
+						YOffset=-Speed;
+					}
+					if(Pad->wButtons&XINPUT_GAMEPAD_DPAD_DOWN) {
+						YOffset=+Speed;
+					}
+					if(Pad->wButtons&XINPUT_GAMEPAD_DPAD_LEFT) {
+						XOffset=-Speed;
+					}
+					if(Pad->wButtons&XINPUT_GAMEPAD_DPAD_RIGHT) {
+						XOffset=+Speed;
+					}
+					
+					// Action buttons
+					if(Pad->wButtons&XINPUT_GAMEPAD_A) {
+						
+					}
+					if(Pad->wButtons&XINPUT_GAMEPAD_B) {
+						
+					}
+					if(Pad->wButtons&XINPUT_GAMEPAD_X){
+						
+					}
+					if(Pad->wButtons&XINPUT_GAMEPAD_Y) {
+						
+					}
+					if(Pad->wButtons&XINPUT_GAMEPAD_RIGHT_SHOULDER) {
+						
+					}
+					if(Pad->wButtons&XINPUT_GAMEPAD_LEFT_SHOULDER) {
+						
+					}
+					if(Pad->wButtons&XINPUT_GAMEPAD_START) {
+						
+					}
+					if(Pad->wButtons&XINPUT_GAMEPAD_BACK) {
+						GlobalRunning = false;
+					}
+					
+					
+					// Left Thumbstick
+					real32 StickAverageX = 0;
+					if(Pad->sThumbLX < - XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE){
+						StickAverageX = (real32)((Pad->sThumbLX + XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE) / (32768.0f - XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE));							
+					} else if (Pad->sThumbLX > XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE) {
+						StickAverageX = (real32)((Pad->sThumbLX + XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE) / (32767.0f - XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE));
+					}
+					real32 StickAverageY = 0;
+					if(Pad->sThumbLY < - XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE){
+						StickAverageY = (real32)((Pad->sThumbLY + XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE) / (32768.0f - XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE));							
+					} else if (Pad->sThumbLY > XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE) {
+						StickAverageY = (real32)((Pad->sThumbLY + XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE) / (32767.0f - XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE));
+					}
+					
+					XOffset += (int)(4.0f*(StickAverageX));
+					YOffset -= (int)(4.0f*(StickAverageY));
+					ToneHz = 256 + (int)(128.0f*(StickAverageY));
+				}
 				
+				// MAKE THE SOUND HAPPEN
+				// ---------------
+				// ---------------
 				// Something to do with sound. TODO:(fill this in later)
 				// Get the amount of bytes we need to write into the sound buffer
 				DWORD ByteToLock = 0;
@@ -458,12 +566,9 @@ int CALLBACK WinMain(
 				
 				
 				// GENERATE OUR SOUND
-				// ---------------
-				// ---------------
 				// For now it's going to be a simple Sine wave.
 				// The sample count is the amount of samples we will need to set for the current chunk of sound
 				int SampleCount = BytesToWrite / BytesPerSample;
-				int ToneHz = 256;
 				static real32 tSine;
 				int16 ToneVolume = 3000;
 				int WavePeriod = SamplesPerSecond/ToneHz;
@@ -479,8 +584,6 @@ int CALLBACK WinMain(
 				}
 				
 				// FILL THE SOUND BUFFER WITH OUR GENERATED SOUND
-				// ---------------
-				// ---------------
 				if(SoundIsValid){
 					// The GlobalSoundBuffer->Lock method will basically take the pointers you give it and point 
 					// them to an area in memory where you can write data that will actually be played by the sound 
@@ -528,8 +631,6 @@ int CALLBACK WinMain(
 				} else {
 					SoundIsValid = false;
 				}
-
-
 
 				// RENDER A WEIRD GRADIENT THING
 				// ---------------
