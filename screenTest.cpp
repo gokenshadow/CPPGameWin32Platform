@@ -25,6 +25,8 @@ typedef double real64;
 
 // This will allow you to use Microsoft's direct sound definitions
 #include "mingwdsound.h"
+
+// This will allow you to use Microsoft's Xinput definitions
 #include "mingwxinput.h"
 //#include <dsound.h>
 
@@ -272,7 +274,7 @@ int CALLBACK WinMain(
 			int GameUpdateHz = 30;
 			int FramesOfAudioLatency = 3;
 			
-			// Initialize Sound
+			// INITIALZE SOUND
 			// ---------------
 			// ---------------
 			int SamplesPerSecond = 48000;	// 48000hz, 44000hz, 22000hz, whatever you want, really
@@ -345,42 +347,157 @@ int CALLBACK WinMain(
 				}		
 			}
 			
+			/*
+			THE SOUND BUFFER LOOP
+			The ^ SoundBuffer that we created above ^ with the DirectSound->CreateSoundBuffer() method is a 
+			special space in memory that the DirectSound allocates for us. 
+			The computer's sound card will read into this space of memory when it wants to output sound.
+			Here's a diagram to represent this space in memory:
 			
-			// Clear the sound buffer 
-			// The GlobalSoundBuffer->Lock method will basically take the pointers you give it and point 
-			// them to an area in memory where you can write data that will actually be played by the sound 
-			// card. We are going to get that memory, and clear it all to 0.
-			// First, we create the pointers we need
+			|------------------------------------------------------------------------|
+			
+			
+			Within the SoundBuffer there are two values we have to be aware of: the PlayCursor, and the 
+			WriteCursor. Let's add them to our diagram:
+			
+			|[*]-------------------------{*}-----------------------------------------|
+		  PlayCursor				  WriteCursor
+			
+			When you start the SoundBuffer playing with the SoundBuffer->Play() method, the PlayCursor and 
+			the WriteCursor will start moving forward in the memory:
+			
+			|---------------[*]-------------------------{*}--------------------------|
+			   --------->PlayCursor		  --------->WriteCursor
+			
+			And they will keep moving and moving and moving
+			
+			|----------------------------------------[*]-------------------------{*}-|
+								   -------------->PlayCursor      ---------->WriteCursor
+			
+			If a Cursor goes farther than the end of the memory, it will loop back around to the beginning:
+			
+			|-------{*}----------------------------------------[*]-------------------|
+		     --->WriteCursor		                  ------>PlayCursor            --
+			   (looped around)
+		
+			And they will keep moving in this way pretty much forever
+			
+			|----------------{*}----------------------------------------[*]----------|
+			 ------------>WriteCursor------------------------------->PlayCursor------           
+			
+			
+			THE PLAYCURSOR AND WRITECURSOR
+			The PlayCursor points to the spot in the SoundBuffer where the sound card is 
+			currently reading the data to output the sound. To be more precise, it points to the
+			address JUST AFTER that spot. 
+			
+			The WriteCursor is the closest spot in the memory ahead of the PlayCursor 
+			where it is safe to write sound data. 
+			
+			If you write data ahead of the WriteCursor, your sound will sound good (oooo). 
+			If you DON'T write data ahead of the WriteCursor, it will sound glitchy or 
+			scratchy or wrong somehow (xxxxx) because the PlayCursor might hit some data 
+			before it actually gets written or when it's only been half-written.
+			
+			                        (v bad sounding data v)  (v good sounding data v)
+			|---------------[*]------xxxxxxxxxxxxxxxxxxxxx{*}ooooooooooooooooooooooo|
+			   --------->PlayCursor		  --------->WriteCursor
+			*/
+			
+			
+			// CLEAR THE SOUND BUFFER
+			/* 
+			-------
+			Before we start our sound playing with the SoundBuffer->Play() method,
+			we want to make sure all of the data within it is cleard to 0 because
+			sometimes windows will allocate space for the data without actually
+			clearing it, which will give us bad data.
+			
+			LOCKING THE SOUND BUFFER
+			The SoundBuffer->Lock method will basically take a certain specified amount 
+			of the SoundBuffer's memory and lock it for us, so we can write sound 
+			data into it. It will then take some pointers you give it (*Region1, *Region2) 
+			and point them to the starting address of that sound data we just locked.
+			*/
+			
+			// The first thing we need to do is create those pointers.
 			VOID *Region1;
 			DWORD Region1Size;
 			VOID *Region2;
 			DWORD Region2Size;
 			
-			// Then, we shove those pointers into the Lock method, which will point them to the
-			// "sound card" area we can write to
+			/*
+			REGION1 and REGION2
+			If there is NO looping in the data we're trying to lock, *Region1 will 
+			point to the starting address of all the data we have locked, and 
+			*Region2 will be completely blank.
+			
+			If there IS looping in the data we're trying to lock, *Region1 will point
+			to the starting address of the data BEFORE the looping happens, and 
+			*Region2 will point to the starting address of the data AFTER the looping 
+			happens.
+			
+			To illustrate this, let's go back to our good old SoundBuffer diagram:
+			
+			|-----[*]-------------------------{*}-----------------------------------|
+		       PlayCursor				  WriteCursor
+			   
+			Let's say we want to lock (L) some data ahead of the WriteCursor, and the 
+			amount of data happens to NOT have any looping. Here's what the regions
+			would look like:
+										(*Region1 v)  									(*Region2 v)                                
+			|-----[*]--------------------------{*}LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL--|             0
+		       PlayCursor				  WriteCursor
+			   
+			*Region1 points to the beginning of the locked data, and *Region2 points 
+			nowhere because it's not needed.
+			
+			Now let's say we want to lock (L) an amount of data ahead of the 
+			WriteCursor that DOES have looping. Here's what the regions would look
+			like for that:
+			
+   (*Region2 v)					        (*Region1 v)
+			|LLLLL[*]--------------------------{*}LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL|
+		       PlayCursor				  WriteCursor
+			   
+			  *Region1 points to the beginning of the locked data BEFORE the looping,
+			  and *Region2 points to the beginning of the locked data AFTER the
+			  looping. See? Easy peasy.
+			  
+			  Region1Size and Region2Size specify the size of the data locked, and
+			  you would use them if you wanted to loop through the data without going
+			  beyond it.
+			*/
+			
+			
+			// Alright, let's shove these pointers into the Lock method, and get our
+			// SoundBuffer address, so we can clear the whole thing
 			if(SUCCEEDED(GlobalSoundBuffer->Lock(0, SoundBufferSize, &Region1, &Region1Size, &Region2, &Region2Size, 0 ))) {
-				// Finally we clear all of the data by looping through the samples and setting them all to 0
+				// Since we're basically grabbing all of the data from 0, this will,
+				// in theory, only have to use *Region1, but we're going to loop
+				// through both regions just in case
 				uint8 *DestSample = (uint8 *)Region1; 
 				for(DWORD ByteIndex=0; ByteIndex < Region1Size; ++ByteIndex) {
-					*DestSample++ = 0;
+					*DestSample++ = 0; // Clear to 0
 				}
 				DestSample = (uint8 *)Region2;
 				for(DWORD ByteIndex=0; ByteIndex < Region2Size; ++ByteIndex) {
-					*DestSample++ = 0;
+					*DestSample++ = 0; // Clear to 0
 				}
 				GlobalSoundBuffer->Unlock(Region1, Region1Size, Region2, Region2Size);
-			}			
+			}
 			
-			// Play the sound buffer
-			GlobalSoundBuffer->Play(0, 0, DSBPLAY_LOOPING);
+			// Now We can start playing the sound knowing for sure that it won't 
+			// make random noises because of uncleared data.
+			GlobalSoundBuffer->Play(0, 0, DSBPLAY_LOOPING);	
 			
-			// Allocate memory for sound buffer
-			// This is the memory we are going to use to write our sound into before it gets written into the "sound card" area
-			// memory
+			// ALLOCATE PRE-WRITE MEMORY FOR SOUND BUFFER
+			// This is the memory we are going to use to write our sound into before 
+			// it gets written into the SoundBuffer memory
 			int16 *Samples = (int16 *)VirtualAlloc(0, SoundBufferSize, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
 			
-			bool SoundIsPlaying = false;
 			DWORD LastPlayCursor = 0;
+			// We will keep the sound off until it's lined up correctly
 			bool SoundIsValid = false;
 	
 	
@@ -548,17 +665,120 @@ int CALLBACK WinMain(
 				// MAKE THE SOUND HAPPEN
 				// ---------------
 				// ---------------
-				// Something to do with sound. TODO:(fill this in later)
-				// Get the amount of bytes we need to write into the sound buffer
+				// GET STARTING POSITION AND AMOUNT OF BYTES NEEDED TO WRITE INTO SOUNDBUFFER
+				// ByteToLock will tell us where we will START when we lock data in our 
+				// SoundBuffer.
 				DWORD ByteToLock = 0;
-				DWORD TargetCursor = 0;
+				
+				// BytesToWrite will tell us how far we will go until we END when we lock our data in
+				// the SoundBuffer.
 				DWORD BytesToWrite = 0;
+				
+				// TargetCursor is the point in the SoundBuffer where we will want to END. It will be
+				// used to calculate our BytesToWrite value
+				DWORD TargetCursor = 0;
+				
+				/* 
+				Ideally we want to Lock (L) our data starting (ByteToLock) at the 
+				WriteCursor address and ending (BytesToWrite) just before the PlayCursor 
+				address like so:
+				  end here					  start here
+				|LLLLL[*]-------------------------{*}LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL|
+			      (PlayCursor)                (WriteCursor)
+
+				We're not exactly going to do that.
+				*/
+				
 				if(SoundIsValid){
+					/* The FIRST time thru, RunningSampleIndex will be set to the 
+					   WriteCursor address, so the data that our SoundBuffer Locks (L) will 
+					   start (ByteToLock) at the WriteCursor address and end (BytesToWrite) 
+					   at the place PlayCursor address was at the start of our game loop (LastPlayCursor), 
+					   which means we'll first Lock our sound from the WriteCursor address
+					   like so:
+					   
+					     end here					start here
+					  |LLLLL[*]-------------------------{*}LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL|
+						 (PlayCursor)               (WriteCursor)
+					  
+					  Time will pass, and we will write our sound data (D) into the Locked area (L) 
+					  as the PlayCursor moves toward it like so:            
+									                  (look at all that beautiful sound data being written) 
+																			   v 		
+					  |LLLLL-------------------------[*]DDDDDDDDDDDDDDDDDDDDDDDDLLLLLL{L}LLLLL|
+					          ------------------>(PlayCursor)   ----------------->(WriteCursor)
+													  ^
+				      (look at that evil PlayCursor Moving toward our precious data
+				       good thing we already wrote it. check and mate, PlayCursor!)
+					  
+					  
+					  Eventually, we'll have written all the data we Locked, like so (the 
+					  PlayCursor will have started hitting the sound at this point, so we 
+					  would probably hear the sound at this point):
+					  
+		(look at all that data we finshed writing)
+					       v
+					  |DDDDD--------------------------DDDDDD[D]DDDDDDDDDDDDDDDDDDDDD{D}DDDDDDD|
+					                          --------->(PlayCursor)   -------->(WriteCursor)
+															 ^
+						             (look at that PlayCursor Playing our sound)
+									 
+					  And that's the end of our FIRST time thru. Wasn't it fun?
+					  
+					  
+					  The SECOND time thru, RunningSampleIndex will already be set to the address directly 
+					  after the last place we wrote our data like so:
+					        
+			       (RunningSampleIndex)
+					        v
+					  |DDDDD--------------------------DDDDDD[D]DDDDDDDDDDDDDDDDDDDDD{D}DDDDDDD|
+					                          --------->(PlayCursor)   -------->(WriteCursor)
+
+					  So we will Lock our data (L) starting at that position and ending at the place our
+					  our PlayCursor was in the previous loop (LastPlayCursor).
+				   (RunningSampleIndex)				 (LastPlayCursor)
+							v						        v
+					  |dddddLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL[ ]dd[d]ddddddddddddddddddddddd{d}d|
+					                               --------->(PlayCursor)      ------>(WriteCursor)
+						
+					 Time will pass, and we will write our new sound data (D) as the PlayCursor continues 
+					 to move toward it like the evil little PlayCursor it is:
+					 
+					      (look at all that brand new sound data being born for the first time!)
+														 v
+					 |dddddDDDDDDDDDDDDDD{D}DDDDDDDDDDDDDDddddddddddddddddddddddddddddd[d]dd|
+					   ------------->(WriteCursor)                     --------->(PlayCursor)
+																					  ^
+													   (look at that wicked PlayCursor, getting ready to loop
+														around and hit our precious new born data. Good thing we 
+														already wrote it! You've been foiled again, PlayCursor!)
+														
+					 And that is the end of our SECOND time thru. After that, the process just repeats. We
+					 Lock our SoundBuffer data starting at the last place we left off (RunningSampleIndex)
+					 and ending at the place the PlayCursor was in the last loop (LastPlayCursor). We repeat
+					 these steps over and over ad infinitum until the program ends.
+					 
+					 And that, my friends, is how you spend way to long explaining how a SoundBuffer loop
+					 works! I'm so hungry!
+					*/
+					
 					ByteToLock = (RunningSampleIndex*BytesPerSample) % SoundBufferSize;
+					
+					// Instead of targeting ending exactly on the PlayCursor like would be ideal, we're
+					// going to 
 					TargetCursor = ((LastPlayCursor + (LatencySampleCount*BytesPerSample)) % SoundBufferSize);
+					
+					// If the sound buffer looks like this:
+					//                           end here              start here
+					// |wherewewanttowritedata{TargetCursor}----------[ByteToLock]wherewewanttowritedata|
 					if(ByteToLock > TargetCursor){
+						// We subtract the Starting Position from the total size of the SoundBuffer,
+						// which gives us
 						BytesToWrite = (SoundBufferSize - ByteToLock);
 						BytesToWrite += TargetCursor;
+					// If the sound buffer looks like this:
+					//       start here										  end here
+					// |----[ByteToLock]wherewewanttowritedataaaaaaaaaaaaaaa{TargetCursor}--------------|
 					} else {
 						BytesToWrite = TargetCursor - ByteToLock;
 					}
@@ -592,7 +812,7 @@ int CALLBACK WinMain(
 					
 					// We start by shoving those previous pointers into the Lock method, which will point them to the
 					// "sound card" area we can write to
-					if(SUCCEEDED(GlobalSoundBuffer->Lock(ByteToLock, BytesToWrite,&Region1, &Region1Size,&Region2, &Region2Size,0 ))) {				  
+					if(SUCCEEDED(GlobalSoundBuffer->Lock(ByteToLock, BytesToWrite, &Region1, &Region1Size,&Region2, &Region2Size,0 ))) {				  
 						DWORD Region1SampleCount = Region1Size/BytesPerSample;
 						
 						// Then we loop through the memory of the sound card area, one 16-bit sample at a time, and 
@@ -618,15 +838,38 @@ int CALLBACK WinMain(
 					}
 				}
 				
-				
 				// TODO: (Fill this in later)
+				/*
+					SOUND example of point in time
+					
+				    [ ] = PlayCursor
+					{ } =  WriteCursor
+					-- = Sound Data that hasn't been written yet
+					** = Sound data has been written but not played
+					o  = Sound data that is currently being played
+					xx = Sound data that has been played
+					  	            Data Already Commited	    Data that should be written
+					|xxxxxxxxx0[*]*************************{*}--------------------------------|
+				  Start	      PlayC                       WriteC                        Loop-to-Start
+				*/
+				
+				//  As the buffer is played, the play cursor moves and always points to the next byte of data to be played. 
 				DWORD PlayCursor;
+				
+				// The write cursor is the point after which it is safe to write data into the buffer. The block between the play cursor 
+				// and the write cursor is already committed to be played, and cannot be changed safely.
 				DWORD WriteCursor;
+				
+				// Get the current possition of the sound
 				if(GlobalSoundBuffer->GetCurrentPosition(&PlayCursor,&WriteCursor) == DS_OK){
+					// Save the current position for the next time we run through the loop
 					LastPlayCursor = PlayCursor;
 					if(!SoundIsValid) {
+						// This is the point where the sound will get turned on if this is the first time through the loop
+						// Get the offset address in the buffer where the sound currently is playing
 						RunningSampleIndex = WriteCursor / BytesPerSample;
-						SoundIsValid = true;							
+						// Turn the sound on
+						SoundIsValid = true;
 					}
 				} else {
 					SoundIsValid = false;
