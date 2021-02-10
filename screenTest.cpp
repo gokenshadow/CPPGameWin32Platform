@@ -19,6 +19,8 @@ typedef double real64;
 
 #define Pi32 3.14159265359f
 #include <math.h>
+#include <iostream>
+#include <limits>
 
 // This will allow you to make windows create a window for you
 #include <windows.h>
@@ -168,6 +170,7 @@ int CALLBACK WinMain(
 ) {
 	// Hide the console (Windows XP shows the console even though this is a WinMain function when it's compiled with MinGW)
 	::ShowWindow(::GetConsoleWindow(), SW_HIDE);
+	::ShowWindow(::GetConsoleWindow(), SW_SHOW);
 	
 	// SET UP THE GAMEPAD
 	// ---------------
@@ -209,7 +212,7 @@ int CALLBACK WinMain(
 	int ScreenHeight = 720;
 	int BytesPerPixel = 4;
     PointerToBackBuffer->Width = ScreenWidth;
-    PointerToBackBuffer->Height = ScreenHeight;
+    PointerToBackBuffer->Height = ScreenHeight;  
     PointerToBackBuffer->Pitch = ScreenWidth*BytesPerPixel;
 
 	// Set the DIB properties
@@ -272,24 +275,109 @@ int CALLBACK WinMain(
 		
         if(Window){
 			int GameUpdateHz = 30;
-			int FramesOfAudioLatency = 3;
-			
+			int FramesOfAudioLatency = 3;			
+
 			// INITIALZE SOUND
 			// ---------------
 			// ---------------
-			int SamplesPerSecond = 48000;	// 48000hz, 44000hz, 22000hz, whatever you want, really
-			uint32 RunningSampleIndex = 0;
-			int BytesPerSample = sizeof(int16)*2;
-			DWORD SoundBufferSize = SamplesPerSecond*BytesPerSample;
-			int LatencySampleCount = FramesOfAudioLatency*(SamplesPerSecond / GameUpdateHz);			
 			
-			// Instead of importing the Lib file and linking it, which would be annoying in MinGW, 
-			// we will just import the DLL instead. LoadLibraryA will tell Windows to search for the
-			// DLL in it's libraries, I believe, but don't quote me on that.
+			// Fundamentally, digital sound is just a bunch of points set up in such a way 
+			// that if you connect them with a line, they will draw a wave:
+			/*  .   .   .
+			   . . . . . .
+			  .   .   .   .
+			*/
+			
+			// These points are called samples. Each sample is actually not a point in space. It's 
+			// just the height of the point in space.
+			/* 3.  3.  3.
+			  2.2.2.2.2.2.
+			 1.  1.  1.  1.
+			*/
+			
+			// So really, if you look at the actual data that represents sound, it would just be a
+			// bunch of numbers, one after the other that represent the individual heights of the
+			// sound wave:
+			/*
+			 [1232123212321]
+			*/
+			
+			// The computer's sound card will start at the beginning of this data:
+			/*
+		(Sound Card)
+		    |     
+		    v 
+			[1232123212321]
+			*/
+			
+			// And it will move through the data, one sample at a time, generating it into a wave:
+			/*
+		  ----------->(Sound Card)
+					      |    
+				          |
+			[123 21 23 21 23 21]
+			              |
+			   3/\   3/\  v 
+			  2/ 2\ 2/ 2\ 2/  
+			 1/   1\/   1\/ 
+			 
+			 */
+			 
+			 // As it generates this wave, the sound hardware will oscillate at the frequencey
+			 // of this wave, and we will hear sound (if speakers or headphones are plugged in to 
+			 // the Sound Card, obviously):
+			 /*
+			   /\    /\    /\
+			  /  \  /  \  /  \
+			 /    \/    \/    \
+			   ^			  
+			  This particular wave would sound like a high pitched hum.
+			*/
+		
+			// Now for where we write this data to get the Sound Card to read it:
+			// The Sound Card will only read data in a special space in memory called the Sound Buffer.
+			// The Sound Buffer used to be a literal address of memory located in the Sound Card itself 
+			// that you could write directly into, but nowadays it has been virutualized, so you have to 
+			// ask Windows for a fake memory address that you can write into. Windows will then copy the
+			// memory from this fake address over to the actual physical address on the Sound Card. 
+			// There are several ways you can aske Windows for access to this virtual sound
+			// buffer, but the easiest is through an old Windows Library called DirectSound. We are
+			// going to use that library.
+			
+			// Instead of importing the DirectSound Lib file and linking it, which would be annoying 
+			// in MinGW, we will just import the DLL. LoadLibraryA will tell Windows to search 
+			// for the DLL in its inner libraries, I believe, but don't quote me on that.
 			HMODULE DSoundLibrary = LoadLibraryA("dsound.dll");
 			
+			// The speed at which this wave is read is called the SamplesPerSecond, it's also known as 
+			// the hz (48000hz, 44100hz, 22000hz, etc)
+			// The higher the SamplesPerSecond, the more data you can fit into a second in sound, and 
+			// the higher quality your sound will be.
+			// We'll set our sound's SamplesPerSecond to 48000hz, since that's the standard for high
+			// quality audio
+			int SamplesPerSecond = 48000;
+			
+			// The RunningSampleIndex is a variable we're creating to represent the individual sample 
+			// that the sound card is currently on in our data when it's generating the wave 
+			uint32 RunningSampleIndex = 0; 
+			
+			// BytesPerSample. Each sample is a particular height at a particular time. That height
+			// will represent the volume of that sound at that time. The BytesPerSample is how 
+			// granularly you can set that height. We are going to set it to 2 bytes, which is the 
+			// size of an int16. Since our sound is going to be stereo, we will need it to be the size
+			// of 2 int16 vars.
+			int BytesPerSample = sizeof(int16)*2;
+			
+			// SoundBufferSize = how big we want our SoundBuffer to be. We are going to make it as big as 
+			// one second of sound.
+			DWORD SoundBufferSize = SamplesPerSecond*BytesPerSample;
+			
+			// TODO: (explain this later)
+			int LatencySampleCount = FramesOfAudioLatency*(SamplesPerSecond / GameUpdateHz);
+			
+			// We will only initialize DirectSound if windows is able to find the library.
 			if(DSoundLibrary){
-				// Get a DirectSound object
+				// Get a DirectSound object - this is a hacky way to do it since we're not actually using the library but the DLL
 				direct_sound_create *DirectSoundCreate = (direct_sound_create *)GetProcAddress(DSoundLibrary, "DirectSoundCreate");
 				
 				// For Direct Sound, we need to initialize a Primary Buffer and a Secondary Buffer.
@@ -297,8 +385,9 @@ int CALLBACK WinMain(
 				// but at some point, it was decided that writing directly into hardware wasn't something
 				// that should be done anymore, so now the Primary Buffer is just used to set up the format
 				// of the sound. 
-				// The Secondary Buffer is where you will need to fill your sound data to make the to make it
-				// come out of the sound card
+				// The Secondary Buffer will go to the fake address Windows creates for you to virtually access
+				// the sound card. When you put data into the Secondary Buffer, Windows will copy that data 
+				// into the sound card for you.
 				LPDIRECTSOUND DirectSound;
 				if(DirectSoundCreate && SUCCEEDED(DirectSoundCreate(0, &DirectSound, 0))) {
 					
@@ -306,8 +395,8 @@ int CALLBACK WinMain(
 					WAVEFORMATEX WaveFormat = {};
 					WaveFormat.wFormatTag = WAVE_FORMAT_PCM;
 					WaveFormat.nChannels = 2;	// 2 channels = stereo sound
-					WaveFormat.nSamplesPerSec = SamplesPerSecond;	// 48000, 44000, 22000, whatever you want, really
-					WaveFormat.wBitsPerSample = 16; // This will be the quality of the sound. 16 will be 32 bits total because its stereo sound
+					WaveFormat.nSamplesPerSec = SamplesPerSecond;
+					WaveFormat.wBitsPerSample = 16; // This will be the granularity of the volume of the sound. 16 will be 32 bits total because its stereo sound
 					WaveFormat.nBlockAlign = (WaveFormat.nChannels*WaveFormat.wBitsPerSample)/8;
 					WaveFormat.nAvgBytesPerSec = WaveFormat.nSamplesPerSec*WaveFormat.nBlockAlign;
 					WaveFormat.cbSize = 0;
@@ -351,7 +440,7 @@ int CALLBACK WinMain(
 			THE SOUND BUFFER LOOP
 			The ^ SoundBuffer that we created above ^ with the DirectSound->CreateSoundBuffer() method is a 
 			special space in memory that the DirectSound allocates for us. 
-			The computer's sound card will read into this space of memory when it wants to output sound.
+			The computer's sound card will virtually read into this space of memory when it wants to output sound.
 			Here's a diagram to represent this space in memory:
 			
 			|------------------------------------------------------------------------|
@@ -410,7 +499,7 @@ int CALLBACK WinMain(
 			-------
 			Before we start our sound playing with the SoundBuffer->Play() method,
 			we want to make sure all of the data within it is cleard to 0 because
-			sometimes windows will allocate space for the data without actually
+			sometimes Windows will allocate space for the data without actually
 			clearing it, which will give us bad data.
 			
 			LOCKING THE SOUND BUFFER
@@ -487,7 +576,7 @@ int CALLBACK WinMain(
 				GlobalSoundBuffer->Unlock(Region1, Region1Size, Region2, Region2Size);
 			}
 			
-			// Now We can start playing the sound knowing for sure that it won't 
+			// Now we can start playing the sound knowing for sure that it won't 
 			// make random noises because of uncleared data.
 			GlobalSoundBuffer->Play(0, 0, DSBPLAY_LOOPING);	
 			
@@ -754,36 +843,69 @@ int CALLBACK WinMain(
 														already wrote it! You've been foiled again, PlayCursor!)
 														
 					 And that is the end of our SECOND time thru. After that, the process just repeats. We
-					 Lock our SoundBuffer data starting at the last place we left off (RunningSampleIndex)
-					 and ending at the place the PlayCursor was in the last loop (LastPlayCursor). We repeat
-					 these steps over and over ad infinitum until the program ends.
+					 Lock our SoundBuffer memory starting at the last place we left off (RunningSampleIndex)
+					 and ending at the place the PlayCursor was in the last loop (LastPlayCursor), and we
+					 fill it in with our sound data. We repeat these steps over and over ad infinitum until 
+					 the program ends.
 					 
-					 And that, my friends, is how you spend way to long explaining how a SoundBuffer loop
+					 And that, my friends, is how you spend way too long explaining how a SoundBuffer loop
 					 works! I'm so hungry!
 					*/
 					
+					// So let's get this thing working
+					// Set the position we want to start Locking from in the SoundBuffer (ByteToLock) to 
+					// the either place we were previously (RunningSampleIndex) (NOTE:this would be the 
+					// WriteCursor position if this is the FIRST loop)
 					ByteToLock = (RunningSampleIndex*BytesPerSample) % SoundBufferSize;
 					
-					// Instead of targeting ending exactly on the PlayCursor like would be ideal, we're
-					// going to 
+					// Instead of targeting our ending point exactly on the PlayCursor like would be ideal, 
+					// we're going to (TODO: finish this explanation)
 					TargetCursor = ((LastPlayCursor + (LatencySampleCount*BytesPerSample)) % SoundBufferSize);
 					
-					// If the sound buffer looks like this:
-					//                           end here              start here
+					// If the spot we want to Lock in the SoundBuffer loops around, i.e. it looks something
+					// like this:
+					//                      ---> end here              start here --->
 					// |wherewewanttowritedata{TargetCursor}----------[ByteToLock]wherewewanttowritedata|
 					if(ByteToLock > TargetCursor){
-						// We subtract the Starting Position from the total size of the SoundBuffer,
-						// which gives us
+						// We first subtract the Starting Position (ByteToLock) from the total size of the 
+						// SoundBuffer (SoundBufferSize):
+						//                          1.  This length (SoundBufferSize) v
+						// [--------------------------------------------------------------------------------]
+						//           2. minus this length (ByteToLock) v 
+						// [---------------------------------------------------------]
+						//															3. equals this length v	
+						//																  (BytesToWrite)
+						//										1					 [----------------------]			
+						// |wherewewanttowritedata{TargetCursor}----------[ByteToLock]wherewewanttowritedata|
 						BytesToWrite = (SoundBufferSize - ByteToLock);
+						
+						// Then we add the length from the beginning of the buffer to the Ending Position 
+						// (TargetCursor) to our value to get the final length we need:
+						//         2. plus this length v                                 1. This length v
+						//				(TargetCursor)								      (BytesToWrite)
+						// [-----------------------------------]                     [----------------------]					
+						//	-ngth (Final BytesToWrite) v								 3. equals this whole le-
+						//	-----------------------------------]                     [----------------------
+						// |wherewewanttowritedata{TargetCursor}----------[ByteToLock]wherewewanttowritedata|
 						BytesToWrite += TargetCursor;
-					// If the sound buffer looks like this:
+						
+					// If the spot we want to Lock in the SoundBuffer DOESN'T loop around, i.e. it looks 
+					// something like this:
 					//       start here										  end here
 					// |----[ByteToLock]wherewewanttowritedataaaaaaaaaaaaaaa{TargetCursor}--------------|
 					} else {
+						// We will subtract our starting position (ByteToLock) from our ending position
+						// (TargetCursor) to get the length we need:
+						//           1. This length v
+						// [-----------------------------------------------------------------]
+						//2. minus v this length
+						// [---------------]
+						//                       3. equals this length (Final BytesToWrite)
+						//      [------------------------------------------------------------]
+						// |----[ByteToLock]wherewewanttowritedataaaaaaaaaaaaaaa{TargetCursor}--------------|
 						BytesToWrite = TargetCursor - ByteToLock;
 					}
 				}
-				
 				
 				// GENERATE OUR SOUND
 				// For now it's going to be a simple Sine wave.
@@ -878,7 +1000,6 @@ int CALLBACK WinMain(
 				// RENDER A WEIRD GRADIENT THING
 				// ---------------
 				// ---------------
-				// Allocate space for a blank Window class in memory
 				uint8 *Row = (uint8*)GlobalBackBuffer.Memory;
 				for(int Y = 0; Y<GlobalBackBuffer.Height; ++Y){
 					uint32 *Pixel = (uint32 *)Row;
