@@ -273,14 +273,15 @@ int CALLBACK WinMain(
 	// -^-----------^-
 	// END OF OPEN A WINDOWS WINDOW
 		
+		// If we succed at opening the Windows window, we will start initializing all our
+		// game stuff
         if(Window){
-			int GameUpdateHz = 30;
-			int FramesOfAudioLatency = 3;			
+			// This is the framerate we will try to hit
+			int GameUpdateHz = 30;			
 
 			// INITIALZE SOUND
 			// ---------------
 			// ---------------
-			
 			// Fundamentally, digital sound is just a bunch of points set up in such a way 
 			// that if you connect them with a line, they will draw a wave:
 			/*  .   .   .
@@ -372,7 +373,14 @@ int CALLBACK WinMain(
 			// one second of sound.
 			DWORD SoundBufferSize = SamplesPerSecond*BytesPerSample;
 			
-			// TODO: (explain this later)
+			// This is the amount we will allow the sound to fall behind the video to make sure
+			// that our sound gets written before the sound card plays it. If it gets written 
+			// at the same time or after the sound card plays it, we'll get scratchy, glitchy 
+			// audio. We are measuring this time in frames because it's easier to think about.
+			int FramesOfAudioLatency = 3;
+			
+			// LatencySampleCount is the amount we will let the sound fall behind the video in order to be
+			// able to write it correctly.
 			int LatencySampleCount = FramesOfAudioLatency*(SamplesPerSecond / GameUpdateHz);
 			
 			// We will only initialize DirectSound if windows is able to find the library.
@@ -580,8 +588,8 @@ int CALLBACK WinMain(
 			// make random noises because of uncleared data.
 			GlobalSoundBuffer->Play(0, 0, DSBPLAY_LOOPING);	
 			
-			// ALLOCATE PRE-WRITE MEMORY FOR SOUND BUFFER
-			// This is the memory we are going to use to write our sound into before 
+			// ALLOCATE PRE-WRITE SOUND GENERATION MEMORY FOR SOUND BUFFER
+			// This is the memory we are going to use to generate some of our own sound before 
 			// it gets written into the SoundBuffer memory
 			int16 *Samples = (int16 *)VirtualAlloc(0, SoundBufferSize, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
 			
@@ -754,18 +762,22 @@ int CALLBACK WinMain(
 				// MAKE THE SOUND HAPPEN
 				// ---------------
 				// ---------------
-				// GET STARTING POSITION AND AMOUNT OF BYTES NEEDED TO WRITE INTO SOUNDBUFFER
-				// ByteToLock will tell us where we will START when we lock data in our 
-				// SoundBuffer.
+				// Before we can write sound data into the SoundBuffer, we need to calculate
+				// exactly WHERE we want to write  it and HOW MUCH of it we want to write.
+				// Let's do that.
+				
+				// ByteToLock is the variable we will use to calculate where we will START when 
+				// we lock data in our SoundBuffer.
 				DWORD ByteToLock = 0;
 				
-				// BytesToWrite will tell us how far we will go until we END when we lock our data in
-				// the SoundBuffer.
+				// TargetCursor is the variable we will use that will point to the address where 
+				// we will want to END in the SoundBuffer.
+				DWORD TargetCursor = 0;
+				
+				// BytesToWrite is the variable we will use to calculate how we long we will move 
+				// until we STOP in the SoundBuffer, so it will be calculated using the TargetCursor.
 				DWORD BytesToWrite = 0;
 				
-				// TargetCursor is the point in the SoundBuffer where we will want to END. It will be
-				// used to calculate our BytesToWrite value
-				DWORD TargetCursor = 0;
 				
 				/* 
 				Ideally we want to Lock (L) our data starting (ByteToLock) at the 
@@ -854,7 +866,7 @@ int CALLBACK WinMain(
 					
 					// So let's get this thing working
 					// Set the position we want to start Locking from in the SoundBuffer (ByteToLock) to 
-					// the either place we were previously (RunningSampleIndex) (NOTE:this would be the 
+					// the the place we were previously (RunningSampleIndex) (NOTE:this would be the 
 					// WriteCursor position if this is the FIRST loop)
 					ByteToLock = (RunningSampleIndex*BytesPerSample) % SoundBufferSize;
 					
@@ -898,82 +910,98 @@ int CALLBACK WinMain(
 						// (TargetCursor) to get the length we need:
 						//           1. This length v
 						// [-----------------------------------------------------------------]
-						//2. minus v this length
+						//2. minus this v length
 						// [---------------]
-						//                       3. equals this length (Final BytesToWrite)
-						//      [------------------------------------------------------------]
+						//                      3. equals this v length (Final BytesToWrite)
+						//                 [-------------------------------------------------]
 						// |----[ByteToLock]wherewewanttowritedataaaaaaaaaaaaaaa{TargetCursor}--------------|
 						BytesToWrite = TargetCursor - ByteToLock;
 					}
 				}
 				
 				// GENERATE OUR SOUND
-				// For now it's going to be a simple Sine wave.
-				// The sample count is the amount of samples we will need to set for the current chunk of sound
+				// As mentioned previously, we will use our own memory we allocated in the *Samples pointer
+				// above.
+				// For now, we will generate a simple sine wave.
+				
+				// The sample count will be set to the amount of data we plan to Lock in the SoundBuffer
 				int SampleCount = BytesToWrite / BytesPerSample;
-				static real32 tSine;
+				
+				//
+				static real32 tSine=0;
+				
+				// This will be the volume we want our sine wave to hit.
 				int16 ToneVolume = 3000;
+				
+				// This will be the length of a single section of sine wave, in order to make it resonate
+				// at the exact tone we set ToneHz to, we have to divide it by the SamplesPerSecond
 				int WavePeriod = SamplesPerSecond/ToneHz;
+				
+				// Set a pointer to the beginning of our Samples memory
 				int16 *SampleOut = Samples;
-				// Loop through our allocated sound memory and change each sample to the height it would be in our sine wave at the
-				// current time in the sound
+
+				// Loop through our Samples memory and change each sample to the height it would be in 
+				// our sine wave at the current time in the sound
 				for(int SampleIndex=0; SampleIndex < SampleCount; ++SampleIndex) {
+					// There is a formula we can use to generate where a sample would be in a Sine 
+					// wave at a particular point in time. However, since we're starting with zero,
+					// we'll just set it to the sine(0), to start off.
+					// But since we're starting at 0, we can just grab the sign of zero, the first time
 					real32 SineValue = sinf(tSine);
 					int16 SampleValue = (int16)(SineValue * ToneVolume);
 					*SampleOut++ = SampleValue;
-					*SampleOut++ = SampleValue;			
-					tSine += 2.0f*Pi32*1.0f/ (real32)WavePeriod;
+					*SampleOut++ = SampleValue;
+					// Here's the formula I mentioned above: 
+					// Sin( ((2*PI) / WavePeriod) * CurrentTime )
+					tSine += ((2.0f*Pi32) / (real32)WavePeriod)*1.0f;
+					// The next time around, we'll get the sine(tSine)
 				}
+				
 				
 				// FILL THE SOUND BUFFER WITH OUR GENERATED SOUND
 				if(SoundIsValid){
-					// The GlobalSoundBuffer->Lock method will basically take the pointers you give it and point 
-					// them to an area in memory where you can write data that will actually be played by the sound 
-					// card. We are going to get that memory, and write our sine wave into it. We are going to use 
-					// the previous pointers we created (*Region1, Region1Size, *Region2, Region2Size) to do this.
+					// This is the point where we FINALLY write our sound data to the actual sound card,
+					// (albeit indirectly through Windows's fake Sound Card memory), i.e. we'll be doing this:
+					/*
+																(sound data being written) 
+																			   v 		
+					  |LLLLL-------------------------[*]DDDDDDDDDDDDDDDDDDDDDDDDLLLLLL{L}LLLLL|
+					          ------------------>(PlayCursor)   ----------------->(WriteCursor)
+													  ^
+									(PlayCursor heading toward sound data)
+					*/
 					
-					// We start by shoving those previous pointers into the Lock method, which will point them to the
-					// "sound card" area we can write to
+					// We start by shoving those previous Region pointers into the Lock method, which will point 
+					// them to the fake "sound card" area of memory Windows gives us to write into
 					if(SUCCEEDED(GlobalSoundBuffer->Lock(ByteToLock, BytesToWrite, &Region1, &Region1Size,&Region2, &Region2Size,0 ))) {				  
-						DWORD Region1SampleCount = Region1Size/BytesPerSample;
 						
-						// Then we loop through the memory of the sound card area, one 16-bit sample at a time, and 
-						// fill each 16 bit sample with the same sample at the same time from our own generated samples
+						// Then we loop through the memory of the sound card area, while simultaneously looping
+						// through the Samples memory of our generated sound, and fill in each individual 16 bit
+						// piece of data, one piece at a time:
+						
+						// First we do it for region1
+						DWORD Region1SampleCount = Region1Size/BytesPerSample;
 						int16 *DestSample = (int16 *)Region1;
 						int16 *SourceSample = Samples;
 						for(DWORD SampleIndex=0; SampleIndex < Region1SampleCount; ++SampleIndex) {
-							*DestSample++ = *SourceSample++;
-							*DestSample++ = *SourceSample++;
+							*DestSample++ = *SourceSample++; // stereo sound left
+							*DestSample++ = *SourceSample++; // stereo sound right 
 							++RunningSampleIndex;
 						}
+						// Then we do it for region2
 						DWORD Region2SampleCount = Region2Size/BytesPerSample;
 						DestSample = (int16 *)Region2;
 						for(DWORD SampleIndex=0; SampleIndex < Region2SampleCount; ++SampleIndex){
-							*DestSample++ = *SourceSample++;
-							*DestSample++ = *SourceSample++;
+							*DestSample++ = *SourceSample++; // stereo sound left
+							*DestSample++ = *SourceSample++; // stereo sound right
 							++RunningSampleIndex;
 						}
 						
-						// I don't know exactly what GlobalSoundBuffer->Unlock does, but if you don't use it, your sound
-						// will play and glitch slightly everytime it loops back around TODO:(fill this in later)
+						// The final thing we have to do is Unlock the data we Locked. If we don't do this,
+						// the sound will get messed up right before we start writing again.
 						GlobalSoundBuffer->Unlock(Region1, Region1Size, Region2, Region2Size);
 					}
 				}
-				
-				// TODO: (Fill this in later)
-				/*
-					SOUND example of point in time
-					
-				    [ ] = PlayCursor
-					{ } =  WriteCursor
-					-- = Sound Data that hasn't been written yet
-					** = Sound data has been written but not played
-					o  = Sound data that is currently being played
-					xx = Sound data that has been played
-					  	            Data Already Commited	    Data that should be written
-					|xxxxxxxxx0[*]*************************{*}--------------------------------|
-				  Start	      PlayC                       WriteC                        Loop-to-Start
-				*/
 				
 				//  As the buffer is played, the play cursor moves and always points to the next byte of data to be played. 
 				DWORD PlayCursor;
@@ -982,12 +1010,17 @@ int CALLBACK WinMain(
 				// and the write cursor is already committed to be played, and cannot be changed safely.
 				DWORD WriteCursor;
 				
-				// Get the current possition of the sound
+				// GET CURRENT SOUND POSITION
+				// In order to know what point in the SoundBuffer we want to write up to without messing with
+				// the sound that is currently playing, we need to grab the 
+				// the PlayCursor's current position and save it (LastPlayCursor)
 				if(GlobalSoundBuffer->GetCurrentPosition(&PlayCursor,&WriteCursor) == DS_OK){
 					// Save the current position for the next time we run through the loop
 					LastPlayCursor = PlayCursor;
+					
+					// This stuff will only happen if it's the first time through the loop. It will give us
+					// a position to start writing sound from.
 					if(!SoundIsValid) {
-						// This is the point where the sound will get turned on if this is the first time through the loop
 						// Get the offset address in the buffer where the sound currently is playing
 						RunningSampleIndex = WriteCursor / BytesPerSample;
 						// Turn the sound on
