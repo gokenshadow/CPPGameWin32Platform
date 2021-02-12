@@ -1,6 +1,6 @@
  win32_handmade
 
- Timestamp is 60208d10 (Sun Feb  7 20:00:00 2021)
+ Timestamp is 602607ff (Thu Feb 11 23:45:51 2021)
 
  Preferred load address is 00400000
 
@@ -54,10 +54,10 @@
  0000:00000003       ___safe_se_handler_count   00000003     <absolute>
  0000:00000100       ___guard_flags             00000100     <absolute>
  0000:00000000       ___ImageBase               00400000     <linker-defined>
- 0001:00005cf0       _WinMain@16                00406cf0 f   win32_handmade.obj
- 0001:00006c80       ?XInputGetStateStub@@YGKKPAU_XINPUT_STATE@@@Z 00407c80 f   win32_handmade.obj
- 0001:00006c90       ?XInputSetStateStub@@YGKKPAU_XINPUT_VIBRATION@@@Z 00407c90 f   win32_handmade.obj
- 0001:00007020       ?Win32MainWindowCallback@@YGJPAUHWND__@@IIJ@Z 00408020 f   win32_handmade.obj
+ 0001:00005d40       _WinMain@16                00406d40 f   win32_handmade.obj
+ 0001:00007000       ?XInputGetStateStub@@YGKKPAU_XINPUT_STATE@@@Z 00408000 f   win32_handmade.obj
+ 0001:00007010       ?XInputSetStateStub@@YGKKPAU_XINPUT_VIBRATION@@@Z 00408010 f   win32_handmade.obj
+ 0001:000073a0       ?Win32MainWindowCallback@@YGJPAUHWND__@@IIJ@Z 004083a0 f   win32_handmade.obj
  0001:00008290       ??$__vcrt_va_start_verify_argument_type@PBD@@YAXXZ 00409290 f i win32_handmade.obj
  0001:000082a0       ??$sprintf_s@$0BAA@@@YAHAAY0BAA@DPBDZZ 004092a0 f i win32_handmade.obj
  0001:000082e0       ?GetController@@YAPAUgame_controller_input@@PAUgame_input@@I@Z 004092e0 f i win32_handmade.obj

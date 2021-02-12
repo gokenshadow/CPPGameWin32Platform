@@ -794,7 +794,7 @@ int CALLBACK WinMain(
 					/* The FIRST time thru, RunningSampleIndex will be set to the 
 					   WriteCursor address, so the data that our SoundBuffer Locks (L) will 
 					   start (ByteToLock) at the WriteCursor address and end (BytesToWrite) 
-					   at the place PlayCursor address was at the start of our game loop (LastPlayCursor), 
+					   at the place the PlayCursor address was at the start of our game loop (LastPlayCursor), 
 					   which means we'll first Lock our sound from the WriteCursor address
 					   like so:
 					   
@@ -874,7 +874,7 @@ int CALLBACK WinMain(
 					// we're going to (TODO: finish this explanation)
 					TargetCursor = ((LastPlayCursor + (LatencySampleCount*BytesPerSample)) % SoundBufferSize);
 					
-					// If the spot we want to Lock in the SoundBuffer loops around, i.e. it looks something
+					// If the spot we want to Lock in the SoundBuffer loops around, i.e. if it looks something
 					// like this:
 					//                      ---> end here              start here --->
 					// |wherewewanttowritedata{TargetCursor}----------[ByteToLock]wherewewanttowritedata|
@@ -949,11 +949,19 @@ int CALLBACK WinMain(
 					// But since we're starting at 0, we can just grab the sign of zero, the first time
 					real32 SineValue = sinf(tSine);
 					int16 SampleValue = (int16)(SineValue * ToneVolume);
+					
+					// TODO: Fill this in later
+					//  int16 int16   int16 int16   int16 int16  ...
+					// [LEFT  RIGHT] [LEFT  RIGHT] [LEFT  RIGHT] ...
 					*SampleOut++ = SampleValue;
 					*SampleOut++ = SampleValue;
 					// Here's the formula I mentioned above: 
 					// Sin( ((2*PI) / WavePeriod) * CurrentTime )
 					tSine += ((2.0f*Pi32) / (real32)WavePeriod)*1.0f;
+					// Normalize the sine
+					if(tSine > 2.0f*Pi32) {
+						tSine -= 2.0f*Pi32;
+					}
 					// The next time around, we'll get the sine(tSine)
 				}
 				
