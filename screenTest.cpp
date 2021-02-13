@@ -53,15 +53,59 @@ static LPDIRECTSOUNDBUFFER GlobalSoundBuffer;
 
 static void *GlobalDibMemory;
 
+
+
+
 // NOTE(Casey): XInputGetState
-#define X_INPUT_GET_STATE(name) DWORD WINAPI name(DWORD dwUserIndex, XINPUT_STATE *pState)
+/*#define X_INPUT_GET_STATE(name) DWORD WINAPI name(DWORD dwUserIndex, XINPUT_STATE *pState)
 typedef X_INPUT_GET_STATE(x_input_get_state);
 X_INPUT_GET_STATE(XInputGetStateStub){
 	return(ERROR_DEVICE_NOT_CONNECTED);
 }
+*/
+
+// MAKE XInputGetState() SAFE TO USE
+// We want to be able to call the XInputGetState() function without getting any
+// errors, even if we aren't able to import the library that contains the 
+// definition of this function.
+
+// We will accomplish this by using a function pointer.
+ 
+// A function pointer is basically a special function that's empty of any 
+// execution code. To give it execution code, you need to point it to a normal 
+// function that has the same function signature, i.e. the same input variables,
+// and it will execute the code in that normal function as if it were its own
+// code. The cool thing about a function pointer is that you can change the 
+// function that it points to at any time. 
+
+// What we will do is create a function pointer, point it to a fake 
+// XInputGetState() function that does basically nothing, then trick 
+// the C++ compiler into thinking that XInputGetState is actually our function 
+// pointer. We'll do this in 4 easy steps.
+
+// Step 1 - Create a Function Type (x_input_get_state) with the same signature 
+// (DWORD dwUserIndex, XINPUT_STATE *pState) as the XInputGetState() function.
+// This function type will be used to create the Function Pointer. 
+typedef DWORD WINAPI x_input_get_state(DWORD dwUserIndex, XINPUT_STATE *pState);
+
+// Step 2 - Define a fake XInputGetState() function.
+// This function will basically do nothing.
+DWORD WINAPI XInputGetStateStub(DWORD dwUserIndex, XINPUT_STATE *pState) {
+	return(ERROR_DEVICE_NOT_CONNECTED);
+}
+
+// Step 3 - Create a function pointer and point it to our fake XInputGetState()
+// function.
+// We'll name this pointer XInputGetState_ because XInputGetState is already
+// taken.
 static x_input_get_state *XInputGetState_ = XInputGetStateStub;
+
+// Step 4 - Trick the C++ compiler into using our XInputGetState_ function
+// whenever we call the XInputGetState() function.
 #define XInputGetState XInputGetState_
 
+
+// See "MAKE XINPUTGETSTATE() SAFE TO USE" above
 // NOTE(Casey): XInputSetState
 #define X_INPUT_SET_STATE(name) DWORD WINAPI name(DWORD dwUserIndex, XINPUT_VIBRATION *pVibration)
 typedef X_INPUT_SET_STATE(x_input_set_state);
@@ -71,9 +115,15 @@ X_INPUT_SET_STATE(XInputSetStateStub){
 static x_input_set_state *XInputSetState_ = XInputSetStateStub;
 #define XInputSetState XInputSetState_
 
-// This is totally hacky way to be able to use the direct sound DLL without having to use the direct sound library
-#define DIRECT_SOUND_CREATE(name) HRESULT WINAPI name(LPCGUID pcGuideDevice, LPDIRECTSOUND *ppDS, LPUNKNOWN pUnkOuter)
-typedef DIRECT_SOUND_CREATE(direct_sound_create);
+// Create a Function Type that has the same signature as the 
+// direct_sound_create function in the DirectSound Library. We will use said
+// Function Type to create a Function Pointer named DirectSoundCreate, which
+// we will point to the DirectSoundCreate() function located in dsound.dll.
+// This is totally hacky way to avoid having to use the DirectSound Library
+// by instead importing only the function we need from the DLL file
+// located somewhere in Windows's innards. This will obviously only work on 
+// Windows, but it's still pretty rad.
+typedef HRESULT WINAPI direct_sound_create(LPCGUID pcGuideDevice, LPDIRECTSOUND *ppDS, LPUNKNOWN pUnkOuter);
 
 // ( v This is NOT the start of the program. v It is a function that windows REQUIRES if you
 // want to open a window. When you create a window class (WNDCLASSA), one of its properties
@@ -277,7 +327,7 @@ int CALLBACK WinMain(
 		// game stuff
         if(Window){
 			// This is the framerate we will try to hit
-			int GameUpdateHz = 30;			
+			int GameUpdateHz = 60;			
 
 			// INITIALZE SOUND
 			// ---------------
@@ -359,14 +409,14 @@ int CALLBACK WinMain(
 			int SamplesPerSecond = 48000;
 			
 			// The RunningSampleIndex is a variable we're creating to represent the individual sample 
-			// that the sound card is currently on in our data when it's generating the wave 
+			// that the sound card is currently on in our data when it's generating the wave
 			uint32 RunningSampleIndex = 0; 
 			
-			// BytesPerSample. Each sample is a particular height at a particular time. That height
+			// Each sample is a particular height at a particular time. That height
 			// will represent the volume of that sound at that time. The BytesPerSample is how 
 			// granularly you can set that height. We are going to set it to 2 bytes, which is the 
 			// size of an int16. Since our sound is going to be stereo, we will need it to be the size
-			// of 2 int16 vars.
+			// of 2 int16 vars, which will be 4 bytes total.
 			int BytesPerSample = sizeof(int16)*2;
 			
 			// SoundBufferSize = how big we want our SoundBuffer to be. We are going to make it as big as 
@@ -383,7 +433,7 @@ int CALLBACK WinMain(
 			// able to write it correctly.
 			int LatencySampleCount = FramesOfAudioLatency*(SamplesPerSecond / GameUpdateHz);
 			
-			// We will only initialize DirectSound if windows is able to find the library.
+			// We will only initialize DirectSound if Windows is able to find the library.
 			if(DSoundLibrary){
 				// Get a DirectSound object - this is a hacky way to do it since we're not actually using the library but the DLL
 				direct_sound_create *DirectSoundCreate = (direct_sound_create *)GetProcAddress(DSoundLibrary, "DirectSoundCreate");
@@ -417,7 +467,7 @@ int CALLBACK WinMain(
 							LPDIRECTSOUNDBUFFER PrimaryBuffer;
 							if(SUCCEEDED(DirectSound->CreateSoundBuffer(&BufferDescription, &PrimaryBuffer,0))) {						
 								if(SUCCEEDED(PrimaryBuffer->SetFormat(&WaveFormat))){
-										// The format has successfully been set
+										// The format has successfully been set at this point.
 								} else {
 									// This would be a good place for logging an error
 								}
@@ -624,7 +674,7 @@ int CALLBACK WinMain(
                 // spits out into it
                  MSG Message;
 
-                // The PeekMessage() function will reach into the inards of the window handle we just
+                // The PeekMessage() function will reach into the innards of the window handle we just
                 // created and grab whatever message (eg window resize, window close, etc..) is queued
                 // up next. It will then send the raw data of that message to the memory we allocated
                 // for the MSG structure above
@@ -893,7 +943,7 @@ int CALLBACK WinMain(
 						
 						// Then we add the length from the beginning of the buffer to the Ending Position 
 						// (TargetCursor) to our value to get the final length we need:
-						//         2. plus this length v                                 1. This length v
+						//         1. This length v                                   2. plus this length v
 						//				(TargetCursor)								      (BytesToWrite)
 						// [-----------------------------------]                     [----------------------]					
 						//	-ngth (Final BytesToWrite) v								 3. equals this whole le-
@@ -927,7 +977,7 @@ int CALLBACK WinMain(
 				// The sample count will be set to the amount of data we plan to Lock in the SoundBuffer
 				int SampleCount = BytesToWrite / BytesPerSample;
 				
-				//
+				// TODO
 				static real32 tSine=0;
 				
 				// This will be the volume we want our sine wave to hit.
@@ -962,7 +1012,6 @@ int CALLBACK WinMain(
 					if(tSine > 2.0f*Pi32) {
 						tSine -= 2.0f*Pi32;
 					}
-					// The next time around, we'll get the sine(tSine)
 				}
 				
 				
