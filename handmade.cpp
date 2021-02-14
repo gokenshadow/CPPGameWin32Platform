@@ -96,7 +96,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 	RenderWeirdGradient (Buffer, GameState->BlueOffset, GameState->GreenOffset);
 }
 
-extern "C" GAME_GET_SOUND_SAMPLES(GameGetSoundSamples) {
+extern "C" void GameGetSoundSamples(game_memory *Memory, game_sound_output_buffer *SoundBuffer) {
 	// TODO(casey): Allow sample offsets here for more robust platform options
 	game_state *GameState = (game_state *)Memory->PermanentStorage;
 	GameOutputSound(GameState, SoundBuffer, GameState->ToneHz);
