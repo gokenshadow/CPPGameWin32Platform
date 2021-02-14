@@ -5,7 +5,7 @@ rem g++ screenTest.cpp -o ScreenTest.exe -L MinGW\lib -lgdi32
 rem #popd
 REM TODO - can we just build both with one exe?
 
-set CommonCompilerFlags=-MT -nologo -Gm- -GR- -EHa- -Od -Oi -WX -wd4456 -wd4189 -wd4201 -wd4100 -W4 -DHANDMADE_INTERNAL=1 -DHANDMADE_WIN32=1 -DHANDMADE_SLOW=1 -Z7 -FC 
+set CommonCompilerFlags=-MT -nologo -Gm- -GR- -EHa- -Od -Oi -WX -wd4456 -wd4189 -wd4201 -wd4100 -W4 -DHANDMADE_INTERNAL=1 -DHANDMADE_WIN32=1 -DHANDMADE_SLOW=1 -Z7 -FC
 set CommonLinkerFlags= user32.lib Gdi32.lib winmm.lib
 
 pushd build

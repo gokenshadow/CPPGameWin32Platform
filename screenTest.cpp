@@ -57,18 +57,7 @@ static void *GlobalDibMemory;
 
 static int64 GlobalPerfCountFrequency;
 
-
-
-
-// NOTE(Casey): XInputGetState
-/*#define X_INPUT_GET_STATE(name) DWORD WINAPI name(DWORD dwUserIndex, XINPUT_STATE *pState)
-typedef X_INPUT_GET_STATE(x_input_get_state);
-X_INPUT_GET_STATE(XInputGetStateStub){
-	return(ERROR_DEVICE_NOT_CONNECTED);
-}
-*/
-
-// MAKE XInputGetState() SAFE TO USE
+// MAKE XInputGetState() SAFE TO USE 
 // We want to be able to call the XInputGetState() function without getting any
 // errors, even if we aren't able to import the library that contains the 
 // definition of this function.
@@ -106,19 +95,16 @@ DWORD WINAPI XInputGetStateStub(DWORD dwUserIndex, XINPUT_STATE *pState) {
 static x_input_get_state *XInputGetState_ = XInputGetStateStub;
 
 // Step 4 - Trick the C++ compiler into using our XInputGetState_ function
-// whenever we call the XInputGetState() function.
+// pointer whenever we call the XInputGetState() function.
 #define XInputGetState XInputGetState_
+// later, we will actually point this function pointer directly to the 
+// XInputGetState() function located in the XInput DLL. This will make it so
+// we don't have to import the Lib file in our code.
 
-//CopyFile("PrintSomethingCool.dll", "PrintSomethingCool_Temp.dll", FALSE); 
 
-// For testing DLL import
-typedef void print_something_cool();
-void PrintSomethingCoolStub () {
-	std::cout << "DLL import for PrintSomethingCool() doesn't work.\n";
-}
-
-// See "MAKE XINPUTGETSTATE() SAFE TO USE" above
-// NOTE(Casey): XInputSetState
+// MAKE XInputSetState() SAFE TO USE
+// This is a shorter way to do the same thing we did for XInputGetState() 
+// see "MAKE XINPUTGETSTATE() SAFE TO USE" above for an explanation
 #define X_INPUT_SET_STATE(name) DWORD WINAPI name(DWORD dwUserIndex, XINPUT_VIBRATION *pVibration)
 typedef X_INPUT_SET_STATE(x_input_set_state);
 X_INPUT_SET_STATE(XInputSetStateStub){
@@ -126,6 +112,15 @@ X_INPUT_SET_STATE(XInputSetStateStub){
 }
 static x_input_set_state *XInputSetState_ = XInputSetStateStub;
 #define XInputSetState XInputSetState_
+
+
+//CopyFile("PrintSomethingCool.dll", "PrintSomethingCool_Temp.dll", FALSE); 
+// For testing DLL import
+typedef void print_something_cool();
+void PrintSomethingCoolStub () {
+	std::cout << "DLL import for PrintSomethingCool() doesn't work.\n";
+}
+
 
 // Create a Function Type that has the same signature as the 
 // direct_sound_create function in the DirectSound Library. We will use said
@@ -252,12 +247,6 @@ int CALLBACK WinMain(
 	print_something_cool *PrintSomethingCool;
 	// Point that function pointer to our fake PrintSomethingCoolStub function
 	PrintSomethingCool = &PrintSomethingCoolStub;
-	// Import the DLL with our actual PrintSomethingCool function
-	HMODULE GameCodeDLL = LoadLibraryA("PrintSomethingCool.dll");
-	if(GameCodeDLL){
-		// Re-point that function pointer to the function in our DLL
-		PrintSomethingCool = (print_something_cool *)GetProcAddress(GameCodeDLL, "PrintSomethingCool");
-	}
 	
 	// See if that function works.
 	PrintSomethingCool();
@@ -387,7 +376,8 @@ int CALLBACK WinMain(
 			// INITIALZE SOUND
 			// ---------------
 			// ---------------
-			// {
+			// EXPLANATION OF HOW SOUND WORKS
+			{
 			// Fundamentally, digital sound is just a bunch of points set up in such a way 
 			// that if you connect them with a line, they will draw a wave:
 			/*  .   .   .
@@ -440,21 +430,20 @@ int CALLBACK WinMain(
 			   ^			  
 			  This particular wave would sound like a high pitched hum.
 			*/
-		
+			
 			// Now for where we write this data to get the Sound Card to read it:
 			// The Sound Card will only read data in a special space in memory called the Sound Buffer.
 			// The Sound Buffer used to be a literal address of memory located in the Sound Card itself 
 			// that you could write directly into, but nowadays it has been virutualized, so you have to 
 			// ask Windows for a fake memory address that you can write into. Windows will then copy the
 			// memory from this fake address over to the actual physical address on the Sound Card. 
-			// There are several ways you can aske Windows for access to this virtual sound
+			// There are several ways you can ask Windows for access to this virtual sound
 			// buffer, but the easiest is through an old Windows Library called DirectSound. We are
 			// going to use that library.
 			
-			// Instead of importing the DirectSound Lib file and linking it, which would be annoying 
-			// in MinGW, we will just import the DLL. LoadLibraryA will tell Windows to search 
-			// for the DLL in its inner libraries, I believe, but don't quote me on that.
-			HMODULE DSoundLibrary = LoadLibraryA("dsound.dll");
+			// But before start DirectSound, we're gonna set some values we will use to do so:
+			}
+			
 			
 			// The speed at which this wave is read is called the SamplesPerSecond, it's also known as 
 			// the hz (48000hz, 44100hz, 22000hz, etc)
@@ -464,38 +453,38 @@ int CALLBACK WinMain(
 			// quality audio
 			int SamplesPerSecond = 48000;
 			
+			// Each sample is a particular height at a particular time. That height
+			// will represent the volume of that sound at that time. The BytesPerSample is how 
+			// granularly you can set that height. We are going to set our BytesPerSample to 2 bytes, 
+			// which is the size of an int16. Since our sound is going to be stereo, we will need it 
+			// to be the size of 2 int16s, which will be 4 bytes total.
+			int BytesPerSample = sizeof(int16)*2;
+			
 			// The RunningSampleIndex is a variable we're creating to represent the individual sample 
 			// that the sound card is currently on in our data when it's generating the wave
 			uint32 RunningSampleIndex = 0; 
 			
-			// Each sample is a particular height at a particular time. That height
-			// will represent the volume of that sound at that time. The BytesPerSample is how 
-			// granularly you can set that height. We are going to set it to 2 bytes, which is the 
-			// size of an int16. Since our sound is going to be stereo, we will need it to be the size
-			// of 2 int16 vars, which will be 4 bytes total.
-			int BytesPerSample = sizeof(int16)*2;
 			
 			// SoundBufferSize = how big we want our SoundBuffer to be. We are going to make it as big as 
 			// one second of sound.
 			DWORD SoundBufferSize = SamplesPerSecond*BytesPerSample;
 			
-			// This is the amount we will allow the sound to fall behind the video to make sure
-			// that our sound gets written before the sound card plays it. If it gets written 
-			// at the same time or after the sound card plays it, we'll get scratchy, glitchy 
-			// audio. We are measuring this time in frames because it's easier to think about.
-			int FramesOfAudioLatency = 5;
-			
-			// LatencySampleCount is the amount we will let the sound fall behind the video in order to be
-			// able to write it correctly.
-			int LatencySampleCount = FramesOfAudioLatency*(SamplesPerSecond / GameUpdateHz);
-			
+			// There is always some variability in the timing of the actual hardware we're writing to, so
+			// we're going to add a small amount of bytes that will account for that variabliity and
+			// prevent it from messing with our sound. We'll call these bytes the SafetyBytes.
 			DWORD SafetyBytes = (SamplesPerSecond*BytesPerSample / GameUpdateHz) / 3;
+			
+			// Alright, now we can import the library.
+			// Instead of importing the DirectSound Lib file and linking it, which would be annoying 
+			// in MinGW, we will just import the DLL. LoadLibraryA will tell Windows to search 
+			// for the DLL in its inner libraries, I believe, but don't quote me on that.
+			HMODULE DSoundLibrary = LoadLibraryA("dsound.dll");
 			
 			// We will only initialize DirectSound if Windows is able to find the library.
 			if(DSoundLibrary){
-				// Get a DirectSound object - this is a hacky way to do it since we're not actually using the library but the DLL
+				// Get a DirectSound object by grabbing it directly from the dsound DLL
 				direct_sound_create *DirectSoundCreate = (direct_sound_create *)GetProcAddress(DSoundLibrary, "DirectSoundCreate");
-				
+			
 				// For Direct Sound, we need to initialize a Primary Buffer and a Secondary Buffer.
 				// The Primary Buffer used to be a way to write data directly into to the sound card itself, 
 				// but at some point, it was decided that writing directly into hardware wasn't something
@@ -503,7 +492,7 @@ int CALLBACK WinMain(
 				// of the sound. 
 				// The Secondary Buffer will go to the fake address Windows creates for you to virtually access
 				// the sound card. When you put data into the Secondary Buffer, Windows will copy that data 
-				// into the sound card for you.
+				// into the sound card for you.	
 				LPDIRECTSOUND DirectSound;
 				if(DirectSoundCreate && SUCCEEDED(DirectSoundCreate(0, &DirectSound, 0))) {
 					
@@ -513,7 +502,7 @@ int CALLBACK WinMain(
 					WaveFormat.nChannels = 2;	// 2 channels = stereo sound
 					WaveFormat.nSamplesPerSec = SamplesPerSecond;
 					WaveFormat.wBitsPerSample = 16; // This will be the granularity of the volume of the sound. 16 will be 32 bits total because its stereo sound
-					WaveFormat.nBlockAlign = (WaveFormat.nChannels*WaveFormat.wBitsPerSample)/8;
+					WaveFormat.nBlockAlign = (WaveFormat.nChannels*WaveFormat.wBitsPerSample)/8; 
 					WaveFormat.nAvgBytesPerSec = WaveFormat.nSamplesPerSec*WaveFormat.nBlockAlign;
 					WaveFormat.cbSize = 0;
 					if(SUCCEEDED(DirectSound->SetCooperativeLevel(Window, DSSCL_PRIORITY))){
@@ -552,6 +541,7 @@ int CALLBACK WinMain(
 				}		
 			}
 			
+			// THE SOUND BUFFER LOOP EXPLANATION 
 			{
 			/*
 			THE SOUND BUFFER LOOP
@@ -627,15 +617,16 @@ int CALLBACK WinMain(
 			*/
 			}
 			
-			// The first thing we need to do is create those pointers.
+			// The first thing we need to do is create some pointer that will be
+			// be used for the regions.
 			VOID *Region1;
 			DWORD Region1Size;
 			VOID *Region2;
 			DWORD Region2Size;
 			
+			// REGION1 and REGION2 EXPLANATION 
 			{
-			/*
-			REGION1 and REGION2
+			/*			
 			If there is NO looping in the data we're trying to lock, *Region1 will 
 			point to the starting address of all the data we have locked, and 
 			*Region2 will be completely blank.
@@ -705,10 +696,10 @@ int CALLBACK WinMain(
 			// it gets written into the SoundBuffer memory
 			int16 *Samples = (int16 *)VirtualAlloc(0, SoundBufferSize, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
 			
-			DWORD LastPlayCursor = 0;
-			// We will keep the sound off until it's lined up correctly
+			// This is just a way we will track if it's our first time through the sound loop, as we will
+			// do things slightly different in that case. Once we've hit our first stime through the loop
+			// we will set this value to true 
 			bool SoundIsValid = false;
-	
 	
 			// INITIALIZE VIDEO
 			// ---------------
@@ -732,6 +723,17 @@ int CALLBACK WinMain(
 			LARGE_INTEGER LastCounter = Win32GetWallClock();
 			LARGE_INTEGER FlipWallClock = Win32GetWallClock();
 			
+			HMODULE GameCodeDLL = 0;
+			// Import the DLL with our actual PrintSomethingCool function
+			CopyFile("ScreenTestGameCode.dll", "ScreenTestGameCode_temp.dll", FALSE);
+			GameCodeDLL = LoadLibraryA("ScreenTestGameCode_temp.dll");
+			if(GameCodeDLL){
+				// Re-point that function pointer to the function in our DLL
+				PrintSomethingCool = (print_something_cool *)GetProcAddress(GameCodeDLL, "PrintSomethingCool");
+			}
+			
+			uint32 LoadCounter = 0;
+			
 			// START THE PROGRAM LOOP
 			// ------------------------------
 			// ------------------------------
@@ -740,7 +742,26 @@ int CALLBACK WinMain(
 			// ------------------------------
             GlobalRunning = true;
 			while(GlobalRunning){
-				
+				// Reload the Game Code every 60 frames
+				if(LoadCounter++ > 60) {
+					// First Unload the Game Code
+					if(GameCodeDLL) {
+						FreeLibrary(GameCodeDLL);
+						GameCodeDLL = 0;
+						PrintSomethingCool = &PrintSomethingCoolStub;
+					}
+					
+					// Reload the Game Code
+					CopyFile("ScreenTestGameCode.dll", "ScreenTestGameCode_temp.dll", FALSE);
+					GameCodeDLL = LoadLibraryA("ScreenTestGameCode_temp.dll");
+					if(GameCodeDLL){
+						// Re-point that function pointer to the function in our DLL
+						PrintSomethingCool = (print_something_cool *)GetProcAddress(GameCodeDLL, "PrintSomethingCool");
+					}
+					
+					LoadCounter = 0;
+				}
+				PrintSomethingCool();
 				// HANDLE WINDOWS MESSAGES
 				// ---------------
 				// ---------------
@@ -797,6 +818,7 @@ int CALLBACK WinMain(
 								} else if (VKCode == VK_ESCAPE) {
 									GlobalRunning = false;
 								} else if (VKCode == VK_SPACE) {
+								} else if (VKCode == 'L') {
 								}
 								bool AltKeyWasDown = ((Message.lParam & (1 << 29)) != 0);
 								if ((VKCode == VK_F4) && AltKeyWasDown){
@@ -886,31 +908,87 @@ int CALLBACK WinMain(
 				// MAKE THE SOUND HAPPEN
 				// ---------------
 				// ---------------
+				
+				// We'll need this for timing stuff
 				LARGE_INTEGER AudioWallClock = Win32GetWallClock();
 				real32 FromBeginToAudioSeconds = Win32GetSecondsElapsed(FlipWallClock, AudioWallClock);
 				
-				//  As the buffer is played, the play cursor moves and always points to the next byte of data to be played. 
+				// Allocate space on the stack for the PlayCursor 
 				DWORD PlayCursor;
 				
-				// The write cursor is the point after which it is safe to write data into the buffer. The block between the play cursor 
-				// and the write cursor is already committed to be played, and cannot be changed safely.
+				// Allocate space on the stack for the WriteCursor
 				DWORD WriteCursor;
 				
-				// GET CURRENT SOUND POSITION
-				// In order to know what point in the SoundBuffer we want to write up to without messing with
-				// the sound that is currently playing, we need to grab the 
-				// the PlayCursor's current position and save it (LastPlayCursor)
-				
+				// GetCurrentPosition will give you the current position of the PlayCursor and WriteCursor
 				if(GlobalSoundBuffer->GetCurrentPosition(&PlayCursor,&WriteCursor) == DS_OK){				
+					// HOW THE SOUND WILL BE ADDED TO THE SOUND BUFFER
 					{
-					/* HOW THE SOUND WILL BE ADDED TO THE SOUND BUFFER
-					   We will set RunningSampleIndex to 
+					/* 
+					   In order to write data into the SoundBuffer without messing up the audio, we will have
+					   to plan exactly where we are going to START writing and where we are going to END writing
+					   each time we go through our game loop.
 					   
-					   PART 1 - CALCULATING THE TARGET CURSOR 
-						We define a safety value that is the number of samples (s) we think our game update loop
-						may vary by (let's say up to 2ms)
-						When we wake up to write audio, we will look and see what the play cursor position is:						
-					  VidRender     frame 2                        frame 3                    frame 4
+					   We must not START writing anytime before the WriteCursor's position. And we must not END
+					   writing anytime after the PlayCursor position.
+					  
+					   PART 1 - GETTING OUR START POSITION
+					   We will always START writing at the RunningSampleIndex value. The FIRST time through, this 
+					   value will be set to the exact position of the WriteCursor:
+					  
+									  RunningSampleIndex
+								   start here v
+					   [---[-]---------------{-}----------------]
+					    PlayCursor       WriteCurosr
+						
+					   as we write data (DDDD) into the SoundBuffer, the RunningSampleIndex will move 
+					   forward:
+					   
+									  ---------> RunningSampleIndex
+											             v end here 
+					   [---[-]---------------{-}DDDDDDDDD-------]
+					    PlayCursor       WriteCurosr
+					   
+					   So the NEXT time through, when we start at the RunningSampleIndex, we'll start exactly
+					   where we left off previously:
+					   
+												RunningSampleIndex
+									          start here v
+					   [---[-]---------------{-}DDDDDDDDD-------]
+					    PlayCursor       WriteCurosr
+					   
+					   And we'll just do that for every other time through.
+					   
+					   
+					   PART 2 - CALCULATING THE TARGET CURSOR
+						Our TargetCursor is where we plan to END writing our data, and subsequently, 
+						it's where we plan to START writing our data at the next loop. We want our sound 
+						to have as low a latency as possible, so we have to be careful when we're deciding 
+						where we want the TargetCursor to be. 
+						
+						It's actually better to to think of this in terms of frames than just samples since we
+						want to have our audio match our video as close as possible.
+						
+						When we're thinking of just sound samples, we can picture a space in memory that loops 
+						around itself forever:
+						
+						[------[-]--------{-}----]
+						 --->PCursor--->WCursor--
+						 
+						When we're thinking in frames, however, it's better to think of a space in memory that
+						goes forward infinitely and has boundaries for each frame:
+						 
+							   frame 2                        frame 3                    frame 4
+						   
+						[----------[-]-------{-}-----|--------------------------|--------------------------]
+						   ----->PCursor-->WCursor
+						
+						With this in mind, let's get to how we're going to calculate the TargetCursor.
+						
+						We define a safety value (SafetyBytes) that is the number of samples we think our game 
+						update loop may vary by (let's say up to 2ms)
+						
+						We will look to see where the PlayCurosr is:						
+							   frame 2                        frame 3                    frame 4
 						   
 						[----[-]---------------------|--------------------------|--------------------------]
 							  ^
@@ -967,109 +1045,32 @@ int CALLBACK WinMain(
 							  ^                        ^			 [---------------------------------]
 							PCursor------------->futurePCursor	 [----]		+	one frame of audio
 															 saftey margin
-						END OF SIDEBAR
-					  
-					  
-					  PART 2 - LOCK THE DATA, WRITE THE DATA, REPEAT 
-					   Here's how the loop for Locking and Writing data will be:
-					   The FIRST time thru, RunningSampleIndex will be set to the 
-					   WriteCursor address, so the data that our SoundBuffer Locks (L) will 
-					   start (ByteToLock) at the WriteCursor address and end (BytesToWrite) 
-					   wherever we calculated our TargetCursor to be (TargetCursor).
-					  
-					  We'll first Lock our sound from the WriteCursor address all the way to 
-					  our TargetCursor like so:
-					   
-						 end here					start here
-					  |LLLLL[*]-------------------------{*}LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL|
-						 (PlayCursor)               (WriteCursor)
-					  
-					  Time will pass, and we will write our sound data (D) into the Locked area (L) 
-					  as the PlayCursor moves toward it like so:            
-													  (look at all that beautiful sound data being written) 
-																			   v 		
-					  |LLLLL-------------------------[*]DDDDDDDDDDDDDDDDDDDDDDDDLLLLLL{L}LLLLL|
-							  ------------------>(PlayCursor)   ----------------->(WriteCursor)
-													  ^
-					  (look at that evil PlayCursor Moving toward our precious data
-					   good thing we already wrote it. check and mate, PlayCursor!)
-					  
-					  
-					  Eventually, we'll have written all the data we Locked, like so (the 
-					  PlayCursor will have started hitting the sound at this point, so we 
-					  would probably hear the sound at this point):
-					  
-		(look at all that data we finshed writing)
-						   v
-					  |DDDDD--------------------------DDDDDD[D]DDDDDDDDDDDDDDDDDDDDD{D}DDDDDDD|
-											  --------->(PlayCursor)   -------->(WriteCursor)
-															 ^
-									 (look at that PlayCursor Playing our sound)
-									 
-					  And that's the end of our FIRST time thru. Wasn't it fun?
-					  
-					  
-					  The SECOND time thru, RunningSampleIndex will already be set to the address directly 
-					  after the last place we wrote our data like so:
-							
-				   (RunningSampleIndex)
-							v
-					  |DDDDD--------------------------DDDDDD[D]DDDDDDDDDDDDDDDDDDDDD{D}DDDDDDD|
-											  --------->(PlayCursor)   -------->(WriteCursor)
-
-					  So we will Lock our data (L) starting at that position and ending at the
-					  next frame boundary
-				   (RunningSampleIndex)				 (LastPlayCursor)
-							v						        v
-					  |dddddLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL[ ]dd[d]ddddddddddddddddddddddd{d}d|
-												   --------->(PlayCursor)      ------>(WriteCursor)
 						
-					 Time will pass, and we will write our new sound data (D) as the PlayCursor continues 
-					 to move toward it like the evil little PlayCursor it is:
-					 
-						  (look at all that brand new sound data being born for the first time!)
-														 v
-					 |dddddDDDDDDDDDDDDDD{D}DDDDDDDDDDDDDDddddddddddddddddddddddddddddd[d]dd|
-					   ------------->(WriteCursor)                     --------->(PlayCursor)
-																					  ^
-													   (look at that wicked PlayCursor, getting ready to loop
-														around and hit our precious new born data. Good thing we 
-														already wrote it! You've been foiled again, PlayCursor!)
-														
-					 And that is the end of our SECOND time thru. After that, the process just repeats. We
-					 Lock our SoundBuffer memory starting at the last place we left off (RunningSampleIndex)
-					 and ending at the place the PlayCursor was in the last loop (LastPlayCursor), and we
-					 fill it in with our sound data. We repeat these steps over and over ad infinitum until 
-					 the program ends.
-					 
-					 And that, my friends, is how you spend way too long explaining how a SoundBuffer loop
-					 works! I'm so hungry!
-					*/
+						And that is our plan.
+					*/										 
 					
 					// So let's get this thing working
-					// Set the position we want to start Locking from in the SoundBuffer (ByteToLock) to 
-					// the the place we were previously (RunningSampleIndex) (NOTE:this would be the 
-					// WriteCursor position if this is the FIRST loop)
 					}
 					
+					// If first time through the loop
 					if(!SoundIsValid) {
 						// Get the offset address in the buffer where the sound currently is playing
 						RunningSampleIndex = WriteCursor / BytesPerSample;
-						// Turn the sound on
+						// Never first time again
 						SoundIsValid = true;
 					}
 					
-					// ByteToLock is the variable we will use to calculate where we will START when 
-					// we lock data in our SoundBuffer.
+					// ByteToLock represents where we will START when we lock data in the SoundBuffer.
 					DWORD ByteToLock = 0;
-					
+					 
 					DWORD ExpectedSoundBytesPerFrame = (SamplesPerSecond * BytesPerSample) / GameUpdateHz;
-							
-					real32 SecondsLeftUntilFlip = (TargetSecondsPerFrame - FromBeginToAudioSeconds);
 					
+					
+					real32 SecondsLeftUntilFlip = (TargetSecondsPerFrame - FromBeginToAudioSeconds);					
 					DWORD ExpectedBytesUntilFlip = (DWORD)((SecondsLeftUntilFlip/TargetSecondsPerFrame)*(real32)ExpectedSoundBytesPerFrame);
 					DWORD ExpectedFrameBoundaryByte = PlayCursor + ExpectedSoundBytesPerFrame;
 					
+					// SafeWriteCursor = our WriteCursor + SafetyBytes
 					DWORD SafeWriteCursor = WriteCursor;
 					if(SafeWriteCursor < PlayCursor) {
 						SafeWriteCursor += SoundBufferSize;
@@ -1079,8 +1080,7 @@ int CALLBACK WinMain(
 					
 					bool32 AudioCardIsLowLatency = SafeWriteCursor < ExpectedFrameBoundaryByte;
 					
-					// TargetCursor is the variable we will use that will point to the address where 
-					// we will want to END in the SoundBuffer.
+					// TargetCursor represents where we will END when we lock data in the SoundBuffer
 					DWORD TargetCursor = 0;
 					if(AudioCardIsLowLatency) {
 						TargetCursor = (ExpectedFrameBoundaryByte + ExpectedSoundBytesPerFrame);
@@ -1104,7 +1104,6 @@ int CALLBACK WinMain(
 					
 					// GENERATE OUR SOUND
 					// As mentioned previously, we will use our own memory we allocated in the *Samples pointer
-					// above.
 					// For now, we will generate a simple sine wave.
 					
 					// The sample count will be set to the amount of data we plan to Lock in the SoundBuffer
@@ -1241,7 +1240,7 @@ int CALLBACK WinMain(
 				} else {
 					//TODO(casey): MISSED FRAME RATE!
 					//TODO(casey): Logging
-					//std::cout << "Missed a frame!" << "\n";
+					std::cout << "Missed a frame!" << "\n";
 				}
 				
 				real32 SecondsPerFrame = Win32GetSecondsElapsed(LastCounter,Win32GetWallClock());
