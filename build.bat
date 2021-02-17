@@ -12,7 +12,8 @@ pushd build
 REM 32-bit build
 REM cl %CommonCompilerFlags% ..\win32_handmade.cpp /link -subsystem:windows,5.1 %CommonLinkerFlags%
 
+del *.pdb > NUL 2> NUL
 REM 64-bit build
-cl %CommonCompilerFlags% ..\handmade.cpp -Fmhandmade.map /LD /link /DLL /EXPORT:GameGetSoundSamples /EXPORT:GameUpdateAndRender
+cl %CommonCompilerFlags% ..\handmade.cpp -Fmhandmade.map -LD /link -PDB:handmade_%date:~-4,4%%date:~-10,2%%date:~-7,2%_%time:~0,2%%time:~3,2%%time:~6,2%.pdb -EXPORT:GameGetSoundSamples -EXPORT:GameUpdateAndRender
 cl %CommonCompilerFlags% ..\win32_handmade.cpp -Fmwin32_handmade.map /link %CommonLinkerFlags%
 popd
