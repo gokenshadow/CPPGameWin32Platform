@@ -34,6 +34,8 @@ typedef double real64;
 #include "mingwxinput.h"
 //#include <dsound.h>
 
+#include "ScreenTest.h"
+
 struct win32_offscreen_buffer {
     // NOTE(casey): Pixels are always 32 bits wide, Memory Order BB GG RR XX
 
@@ -119,6 +121,10 @@ static x_input_set_state *XInputSetState_ = XInputSetStateStub;
 typedef void print_something_cool();
 void PrintSomethingCoolStub () {
 	std::cout << "DLL import for PrintSomethingCool() doesn't work.\n";
+}
+typedef void game_update_and_render(game_offscreen_buffer *Buffer, game_state *GameState);
+void GameUpdateAndRenderStub (game_offscreen_buffer *Buffer,  game_state *GameState) {
+	std::cout << "DLL import for GameUpdateAndRender() doesn't work.\n";
 }
 
 
@@ -247,6 +253,11 @@ int CALLBACK WinMain(
 	print_something_cool *PrintSomethingCool;
 	// Point that function pointer to our fake PrintSomethingCoolStub function
 	PrintSomethingCool = &PrintSomethingCoolStub;
+	
+	// Declare a function pointer to a print_something_cool type function
+	game_update_and_render *GameUpdateAndRender;
+	// Point that function pointer to our fake PrintSomethingCoolStub function
+	GameUpdateAndRender = &GameUpdateAndRenderStub;
 	
 	// See if that function works.
 	PrintSomethingCool();
@@ -472,7 +483,7 @@ int CALLBACK WinMain(
 			// There is always some variability in the timing of the actual hardware we're writing to, so
 			// we're going to add a small amount of bytes that will account for that variabliity and
 			// prevent it from messing with our sound. We'll call these bytes the SafetyBytes.
-			DWORD SafetyBytes = (SamplesPerSecond*BytesPerSample / GameUpdateHz) / 3;
+			DWORD SafetyBytes = (SamplesPerSecond*BytesPerSample / GameUpdateHz) / 1;
 			
 			// Alright, now we can import the library.
 			// Instead of importing the DirectSound Lib file and linking it, which would be annoying 
@@ -723,16 +734,20 @@ int CALLBACK WinMain(
 			LARGE_INTEGER LastCounter = Win32GetWallClock();
 			LARGE_INTEGER FlipWallClock = Win32GetWallClock();
 			
-			HMODULE GameCodeDLL = 0;
+			
 			// Import the DLL with our actual PrintSomethingCool function
+			HMODULE GameCodeDLL = 0;
 			CopyFile("ScreenTestGameCode.dll", "ScreenTestGameCode_temp.dll", FALSE);
 			GameCodeDLL = LoadLibraryA("ScreenTestGameCode_temp.dll");
 			if(GameCodeDLL){
 				// Re-point that function pointer to the function in our DLL
 				PrintSomethingCool = (print_something_cool *)GetProcAddress(GameCodeDLL, "PrintSomethingCool");
+				GameUpdateAndRender = (game_update_and_render *)GetProcAddress(GameCodeDLL, "GameUpdateAndRender");
 			}
 			
 			uint32 LoadCounter = 0;
+			
+			game_state GameState = {};
 			
 			// START THE PROGRAM LOOP
 			// ------------------------------
@@ -749,6 +764,7 @@ int CALLBACK WinMain(
 						FreeLibrary(GameCodeDLL);
 						GameCodeDLL = 0;
 						PrintSomethingCool = &PrintSomethingCoolStub;
+						GameUpdateAndRender = &GameUpdateAndRenderStub;
 					}
 					
 					// Reload the Game Code
@@ -757,11 +773,12 @@ int CALLBACK WinMain(
 					if(GameCodeDLL){
 						// Re-point that function pointer to the function in our DLL
 						PrintSomethingCool = (print_something_cool *)GetProcAddress(GameCodeDLL, "PrintSomethingCool");
+						GameUpdateAndRender = (game_update_and_render *)GetProcAddress(GameCodeDLL, "GameUpdateAndRender");
 					}
 					
 					LoadCounter = 0;
 				}
-				PrintSomethingCool();
+				//PrintSomethingCool();
 				// HANDLE WINDOWS MESSAGES
 				// ---------------
 				// ---------------
@@ -1185,37 +1202,7 @@ int CALLBACK WinMain(
 					SoundIsValid = false;
 				}
 
-				// RENDER A WEIRD GRADIENT THING
-				// ---------------
-				// ---------------
-				uint8 *Row = (uint8*)GlobalBackBuffer.Memory;
-				for(int Y = 0; Y<GlobalBackBuffer.Height; ++Y){
-					uint32 *Pixel = (uint32 *)Row;
-					for(int X = 0; X < GlobalBackBuffer.Width;
-					++X) {
-						/*
-							Pixel in Memory: BB GG RR xx
-							LITTLE ENDIAN ARCHITECTURE
-
-							0x xxBBGGRR
-						*/
-					   uint8 Blue = (X + XOffset);
-					   uint8 Green = (Y + YOffset);
-					   uint8 Red = (X + XOffset);
-
-					   /*
-						Memory:     BB GG RR xx
-						Register:   xx RR GG BB
-					   */
-
-						*Pixel++ = ((Red << 16) | (Green << 16) | Blue);
-					}
-					Row += GlobalBackBuffer.Pitch;
-				}
-
-				// Move the weird gradient from Right to left
-				XOffset+=XSpeed;
-				YOffset+=YSpeed;
+				
 				
 				LARGE_INTEGER WorkCounter = Win32GetWallClock();
 				real32 WorkSecondsElapsed = Win32GetSecondsElapsed(LastCounter, WorkCounter);
@@ -1240,7 +1227,7 @@ int CALLBACK WinMain(
 				} else {
 					//TODO(casey): MISSED FRAME RATE!
 					//TODO(casey): Logging
-					std::cout << "Missed a frame!" << "\n";
+					//std::cout << "Missed a frame!" << "\n";
 				}
 				
 				real32 SecondsPerFrame = Win32GetSecondsElapsed(LastCounter,Win32GetWallClock());
@@ -1250,6 +1237,48 @@ int CALLBACK WinMain(
 				LARGE_INTEGER EndCounter = Win32GetWallClock();
 				LastCounter = EndCounter;
 				
+				// Get the Video Data from the game
+				game_offscreen_buffer GameBuffer = {};
+				GameBuffer.Memory = PointerToBackBuffer->Memory;
+				GameBuffer.Width = PointerToBackBuffer->Width;
+				GameBuffer.Height = PointerToBackBuffer->Height;
+				GameBuffer.Pitch = PointerToBackBuffer->Pitch;	
+				GameUpdateAndRender(&GameBuffer, &GameState);
+				
+				
+				// RENDER A WEIRD GRADIENT THING
+				// ---------------
+				// ---------------
+				/*
+				uint8 *Row = (uint8*)GlobalBackBuffer.Memory;
+				for(int Y = 0; Y<GlobalBackBuffer.Height; ++Y){
+					uint32 *Pixel = (uint32 *)Row;
+					for(int X = 0; X < GlobalBackBuffer.Width;
+					++X) {
+					
+							//Pixel in Memory: BB GG RR xx
+							//LITTLE ENDIAN ARCHITECTURE
+
+							//0x xxBBGGRR
+					
+					   uint8 Blue = (X + XOffset);
+					   uint8 Green = (Y + YOffset);
+					   uint8 Red = (X + XOffset);
+
+					   
+						// Memory:     BB GG RR xx
+						// Register:   xx RR GG BB
+					   
+
+						*Pixel++ = ((Red << 16) | (Green << 16) | Blue);
+					}
+					Row += GlobalBackBuffer.Pitch;
+				}
+
+				// Move the weird gradient from Right to left
+				XOffset+=XSpeed;
+				YOffset+=YSpeed;
+				*/
 				
 				// DISPLAY BUFFER IN WINDOW
 				// ---------------
