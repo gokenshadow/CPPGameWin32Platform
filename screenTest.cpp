@@ -452,7 +452,7 @@ int CALLBACK WinMain(
 			// buffer, but the easiest is through an old Windows Library called DirectSound. We are
 			// going to use that library.
 			
-			// But before start DirectSound, we're gonna set some values we will use to do so:
+			// But before we start DirectSound, we're gonna set some values we will use to do so:
 			}
 			
 			

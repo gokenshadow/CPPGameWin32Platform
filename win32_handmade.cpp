@@ -361,6 +361,11 @@ LRESULT CALLBACK Win32MainWindowCallback(
         } break;
         case WM_ACTIVATEAPP:
         {
+			if(WParam == true) {
+				SetLayeredWindowAttributes(Window, RGB(0,0,0), 255, LWA_ALPHA);
+			} else {				
+				SetLayeredWindowAttributes(Window, RGB(0,0,0), 64, LWA_ALPHA);
+			}
         } break;
 		case WM_SYSKEYDOWN:
 		case WM_SYSKEYUP:
@@ -495,7 +500,64 @@ internal real32 Win32ProcessXInputStickValue (short Value, short DeadZoneThresho
 	return(Result);
 }
 
-internal void Win32ProcessHandlingMessages (game_controller_input *KeyboardController){
+internal void Win32BeginRecordingInput (win32_state *Win32State, int InputRecordingIndex){
+	Win32State->InputRecordingIndex = InputRecordingIndex;
+	//TODO(casey): These files must go in a temporary build directory!!!!!
+	//TODO(casey): Lazily write the giant memory block and use a memory copy instead?
+	
+	char *FileName = "foo.hmi";
+	Win32State->RecordingHandle = CreateFileA(FileName, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0);
+	
+	DWORD BytesToWrite = (DWORD)Win32State->TotalSize;
+	Assert(Win32State->TotalSize = BytesToWrite);
+	DWORD BytesWritten;
+	WriteFile(Win32State->RecordingHandle, Win32State->GameMemoryBlock, BytesToWrite, &BytesWritten, 0);
+}
+
+internal void Win32EndRecordingInput (win32_state *Win32State){
+	CloseHandle(Win32State->RecordingHandle);
+	Win32State->InputRecordingIndex = 0;
+}
+
+internal void Win32BeginInputPlayback (win32_state *Win32State, int InputPlayingIndex){
+	Win32State->InputPlayingIndex = InputPlayingIndex;
+	
+	char *Filename = "foo.hmi";
+	Win32State->PlaybackHandle = CreateFileA(Filename, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
+	
+	DWORD BytesToRead = (DWORD)Win32State->TotalSize;
+	Assert(Win32State->TotalSize = BytesToRead);
+	DWORD BytesRead;
+	ReadFile(Win32State->PlaybackHandle, Win32State->GameMemoryBlock, BytesToRead, &BytesRead, 0);
+}
+
+internal void Win32EndInputPlayback (win32_state *Win32State){
+	CloseHandle(Win32State->PlaybackHandle);
+	Win32State->InputPlayingIndex = 0;
+}
+
+internal void Win32RecordInput(win32_state *Win32State, game_input *NewInput) {
+	DWORD BytesWritten;
+	WriteFile(Win32State->RecordingHandle, NewInput, sizeof(*NewInput), &BytesWritten, 0);
+}
+
+internal void Win32PlaybackInput(win32_state *Win32State, game_input *NewInput) {
+	DWORD BytesRead;
+	if(ReadFile(Win32State->PlaybackHandle, NewInput, sizeof(*NewInput), &BytesRead, 0)) {
+		if(BytesRead == 0) {
+			// NOTE(casey): We've hit the end of the stream. Go back to the beginning.
+			int PlayingIndex = Win32State->InputPlayingIndex;
+			Win32EndInputPlayback(Win32State);
+			Win32BeginInputPlayback(Win32State, PlayingIndex);
+			ReadFile(Win32State->PlaybackHandle, NewInput, sizeof(*NewInput), &BytesRead, 0);
+		}		
+	}
+	else {
+		
+	}
+}
+
+internal void Win32ProcessPendingMessages (win32_state *Win32State, game_controller_input *KeyboardController){
 	// The GetMessage() function will reach into the inards of the window handle we just
 	// created and grab whatever message (eg window resize, window close, etc..) is queued 
 	// up next. It will then send the raw data of that message to the memory we allocated 
@@ -547,6 +609,15 @@ internal void Win32ProcessHandlingMessages (game_controller_input *KeyboardContr
 							GlobalPause = !GlobalPause;							
 						}
 						//Win32ProcessKeyboardMessage (&KeyboardController->RightShoulder, IsDown);
+					} else if (VKCode == 'L') {
+						if(IsDown) {							
+							if(Win32State->InputRecordingIndex == 0) {
+								Win32BeginRecordingInput(Win32State, 1);						
+							} else {
+								Win32EndRecordingInput(Win32State);
+								Win32BeginInputPlayback(Win32State, 1);
+							}
+						}
 					}
 #endif
 					bool AltKeyWasDown = ((Message.lParam & (1 << 29)) != 0);
@@ -729,12 +800,13 @@ int CALLBACK WinMain(
     WNDCLASSA WindowClass = {};
 	
     // Add properties to the Window class
-    WindowClass.style = CS_OWNDC|CS_HREDRAW|CS_VREDRAW;
+    WindowClass.style = CS_HREDRAW|CS_VREDRAW;
     WindowClass.lpfnWndProc = Win32MainWindowCallback;
     WindowClass.cbWndExtra;
     WindowClass.hInstance = Instance;
     //WindowClass.hIcon;
     WindowClass.lpszClassName = "HandmadeHeroWindowClass";
+		
 	
 
 	// TODO(Casey): How to we reliably query on this on windows
@@ -748,7 +820,7 @@ int CALLBACK WinMain(
         
         // create a window handle
         HWND Window = CreateWindowExA(
-            0,                              //dwExstyle
+            WS_EX_TOPMOST|WS_EX_LAYERED,                              //dwExstyle
             WindowClass.lpszClassName,      //lpClassName
             "Handmade Hero",                //lpWindowName - name of window
             WS_OVERLAPPEDWINDOW|WS_VISIBLE, //dwStyle
@@ -763,13 +835,6 @@ int CALLBACK WinMain(
         );
 
         if(Window){
-            // NOTE(CASEY): Since we sepecified CS_OWNDC, we can just get one device
-            // context and use it forever because we are not sharing it with anyone
-            HDC DeviceContext = GetDC(Window);
-            
-			// NOTE(casey): Graphics Test
-			
-			
 			win32_sound_output SoundOutput = {};
 
 			SoundOutput.SamplesPerSecond = 48000;
@@ -788,6 +853,7 @@ int CALLBACK WinMain(
 			
 			bool32 SoundIsPlaying = false;
 			
+			win32_state Win32State = {};
             GlobalRunning = true;
 #if 0
 			// NOTE(casey): This tests the PlayCursor/WriteCursor update frequency
@@ -820,8 +886,9 @@ int CALLBACK WinMain(
 			GameMemory.DEBUGPlatformWriteEntireFile = DEBUGPlatformWriteEntireFile;
 			
 			// TODO (casey): Handle various memory footprints (USING SYSTEM METRUCS)
-			uint64 TotalSize = GameMemory.PermanentStorageSize + GameMemory.TransientStorageSize;
-			GameMemory.PermanentStorage = VirtualAlloc(BaseAddress, (SIZE_T)TotalSize, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+			Win32State.TotalSize = GameMemory.PermanentStorageSize + GameMemory.TransientStorageSize;
+			Win32State.GameMemoryBlock = VirtualAlloc(BaseAddress, (SIZE_T)Win32State.TotalSize, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+			GameMemory.PermanentStorage = Win32State.GameMemoryBlock;
 			GameMemory.TransientStorage = ((uint8 *)GameMemory.PermanentStorage + GameMemory.PermanentStorageSize);
 			
 			
@@ -864,7 +931,7 @@ int CALLBACK WinMain(
 						NewKeyboardController->Buttons[ButtonIndex].EndedDown = OldKeyboardController->Buttons[ButtonIndex].EndedDown;
 					}
 					
-					Win32ProcessHandlingMessages(NewKeyboardController);
+					Win32ProcessPendingMessages(&Win32State, NewKeyboardController);
 					
 					if(!GlobalPause) {
 						// TODO:(casey) Need to not pull disconnected controllers to avoid
@@ -875,94 +942,94 @@ int CALLBACK WinMain(
 							MaxControllerCount = (ArrayCount(NewInput->Controllers) -1);
 						}
 						for (DWORD ControllerIndex = 0; ControllerIndex<MaxControllerCount; ++ControllerIndex){
-						DWORD OurControllerIndex = ControllerIndex + 1;
-						game_controller_input *OldController = GetController(OldInput, OurControllerIndex);
-						game_controller_input *NewController = GetController(NewInput, OurControllerIndex);
-						
-						
-						XINPUT_STATE ControllerState;
-						if(XInputGetState(ControllerIndex, &ControllerState) == ERROR_SUCCESS){
-							NewController->IsConnected = true;
-							// NOTE(Casey): This controller is plugged in
-							// TODO(Casey): See if ControllerState.dwPacketNumber increments too rapidly
-							XINPUT_GAMEPAD *Pad = &ControllerState.Gamepad;
+							DWORD OurControllerIndex = ControllerIndex + 1;
+							game_controller_input *OldController = GetController(OldInput, OurControllerIndex);
+							game_controller_input *NewController = GetController(NewInput, OurControllerIndex);
 							
-							// TODO(Casey): This is a square deadzone, check xinput to verify that the
-							// deadzone is "round" and show how to do round deadzone processing.
-							NewController->IsAnalog = true;
-							NewController->StickAverageX = Win32ProcessXInputStickValue(Pad->sThumbLX, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
-							NewController->StickAverageY = Win32ProcessXInputStickValue(Pad->sThumbLY, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
-							if(NewController->StickAverageX != 0.0f || NewController->StickAverageY != 0.0f){
-								NewController->IsAnalog=true;
-							}
-							if(Pad->wButtons & XINPUT_GAMEPAD_DPAD_UP) {
-								NewController->StickAverageY = 1;
-								NewController->IsAnalog = false;
-							}
-							if(Pad->wButtons & XINPUT_GAMEPAD_DPAD_DOWN) {
-								NewController->StickAverageY = -1;
-								NewController->IsAnalog = false;
-							}
-							if(Pad->wButtons & XINPUT_GAMEPAD_DPAD_LEFT) {
-								NewController->StickAverageX = -1;
-								NewController->IsAnalog = false;
-							}
-							if(Pad->wButtons & XINPUT_GAMEPAD_DPAD_RIGHT) {
-								NewController->StickAverageX = 1;
-								NewController->IsAnalog = false;
-							}
 							
-							real32 Threshold = 0.5f;
-							Win32ProcessXInputDigitalButtton ((NewController->StickAverageX < -Threshold) ? 1 : 0, 
-																&OldController->MoveLeft, 1, 
-																&NewController->MoveLeft);
-																
-							Win32ProcessXInputDigitalButtton ((NewController->StickAverageX > Threshold) ? 1 : 0, 
-																&OldController->MoveRight, 1, 
-																&NewController->MoveRight);
-																
-							Win32ProcessXInputDigitalButtton ((NewController->StickAverageY < -Threshold) ? 1 : 0, 
-																&OldController->MoveDown, 1, 
-																&NewController->MoveDown);
-																
-							Win32ProcessXInputDigitalButtton ((NewController->StickAverageY > Threshold) ? 1 : 0, 
-																&OldController->MoveUp, 1, 
-																&NewController->MoveUp);
-							Win32ProcessXInputDigitalButtton (Pad->wButtons, 
-																&OldController->ActionDown, XINPUT_GAMEPAD_A, 
-																&NewController->ActionDown);
-							Win32ProcessXInputDigitalButtton (Pad->wButtons, 
-																&OldController->ActionRight, XINPUT_GAMEPAD_B, 
-																&NewController->ActionRight);
-							Win32ProcessXInputDigitalButtton (Pad->wButtons, 
-																&OldController->ActionLeft, XINPUT_GAMEPAD_X, 
-																&NewController->ActionLeft);
-							Win32ProcessXInputDigitalButtton (Pad->wButtons, 
-																&OldController->ActionUp, XINPUT_GAMEPAD_Y, 
-																&NewController->ActionUp);
-							Win32ProcessXInputDigitalButtton (Pad->wButtons, 
-																&OldController->RightShoulder, XINPUT_GAMEPAD_RIGHT_SHOULDER, 
-																&NewController->RightShoulder);
-							Win32ProcessXInputDigitalButtton (Pad->wButtons, 
-																&OldController->LeftShoulder, XINPUT_GAMEPAD_LEFT_SHOULDER, 
-																&NewController->LeftShoulder);
-							Win32ProcessXInputDigitalButtton (Pad->wButtons, 
-																&OldController->Start, XINPUT_GAMEPAD_START, 
-																&NewController->Start);
-							Win32ProcessXInputDigitalButtton (Pad->wButtons, 
-																&OldController->Back, XINPUT_GAMEPAD_BACK, 
-																&NewController->Back);
+							XINPUT_STATE ControllerState;
+							if(XInputGetState(ControllerIndex, &ControllerState) == ERROR_SUCCESS){
+								NewController->IsConnected = true;
+								// NOTE(Casey): This controller is plugged in
+								// TODO(Casey): See if ControllerState.dwPacketNumber increments too rapidly
+								XINPUT_GAMEPAD *Pad = &ControllerState.Gamepad;
+								
+								// TODO(Casey): This is a square deadzone, check xinput to verify that the
+								// deadzone is "round" and show how to do round deadzone processing.
+								NewController->IsAnalog = true;
+								NewController->StickAverageX = Win32ProcessXInputStickValue(Pad->sThumbLX, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
+								NewController->StickAverageY = Win32ProcessXInputStickValue(Pad->sThumbLY, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
+								if(NewController->StickAverageX != 0.0f || NewController->StickAverageY != 0.0f){
+									NewController->IsAnalog=true;
+								}
+								if(Pad->wButtons & XINPUT_GAMEPAD_DPAD_UP) {
+									NewController->StickAverageY = 1;
+									NewController->IsAnalog = false;
+								}
+								if(Pad->wButtons & XINPUT_GAMEPAD_DPAD_DOWN) {
+									NewController->StickAverageY = -1;
+									NewController->IsAnalog = false;
+								}
+								if(Pad->wButtons & XINPUT_GAMEPAD_DPAD_LEFT) {
+									NewController->StickAverageX = -1;
+									NewController->IsAnalog = false;
+								}
+								if(Pad->wButtons & XINPUT_GAMEPAD_DPAD_RIGHT) {
+									NewController->StickAverageX = 1;
+									NewController->IsAnalog = false;
+								}
+								
+								real32 Threshold = 0.5f;
+								Win32ProcessXInputDigitalButtton ((NewController->StickAverageX < -Threshold) ? 1 : 0, 
+																	&OldController->MoveLeft, 1, 
+																	&NewController->MoveLeft);
+																	
+								Win32ProcessXInputDigitalButtton ((NewController->StickAverageX > Threshold) ? 1 : 0, 
+																	&OldController->MoveRight, 1, 
+																	&NewController->MoveRight);
+																	
+								Win32ProcessXInputDigitalButtton ((NewController->StickAverageY < -Threshold) ? 1 : 0, 
+																	&OldController->MoveDown, 1, 
+																	&NewController->MoveDown);
+																	
+								Win32ProcessXInputDigitalButtton ((NewController->StickAverageY > Threshold) ? 1 : 0, 
+																	&OldController->MoveUp, 1, 
+																	&NewController->MoveUp);
+								Win32ProcessXInputDigitalButtton (Pad->wButtons, 
+																	&OldController->ActionDown, XINPUT_GAMEPAD_A, 
+																	&NewController->ActionDown);
+								Win32ProcessXInputDigitalButtton (Pad->wButtons, 
+																	&OldController->ActionRight, XINPUT_GAMEPAD_B, 
+																	&NewController->ActionRight);
+								Win32ProcessXInputDigitalButtton (Pad->wButtons, 
+																	&OldController->ActionLeft, XINPUT_GAMEPAD_X, 
+																	&NewController->ActionLeft);
+								Win32ProcessXInputDigitalButtton (Pad->wButtons, 
+																	&OldController->ActionUp, XINPUT_GAMEPAD_Y, 
+																	&NewController->ActionUp);
+								Win32ProcessXInputDigitalButtton (Pad->wButtons, 
+																	&OldController->RightShoulder, XINPUT_GAMEPAD_RIGHT_SHOULDER, 
+																	&NewController->RightShoulder);
+								Win32ProcessXInputDigitalButtton (Pad->wButtons, 
+																	&OldController->LeftShoulder, XINPUT_GAMEPAD_LEFT_SHOULDER, 
+																	&NewController->LeftShoulder);
+								Win32ProcessXInputDigitalButtton (Pad->wButtons, 
+																	&OldController->Start, XINPUT_GAMEPAD_START, 
+																	&NewController->Start);
+								Win32ProcessXInputDigitalButtton (Pad->wButtons, 
+																	&OldController->Back, XINPUT_GAMEPAD_BACK, 
+																	&NewController->Back);
 
-							
-							//bool Start = (Pad->wButtons & XINPUT_GAMEPAD_START);
-							//bool Back = (Pad->wButtons & XINPUT_GAMEPAD_BACK);
-							
-						} else {
-							// NOTE(Casey): The controller is not available
-							NewController->IsConnected = false;
-						}
+								
+								//bool Start = (Pad->wButtons & XINPUT_GAMEPAD_START);
+								//bool Back = (Pad->wButtons & XINPUT_GAMEPAD_BACK);
+								
+							} else {
+								// NOTE(Casey): The controller is not available
+								NewController->IsConnected = false;
+							}
 						
-					}
+						}
 					
 					
 						game_offscreen_buffer Buffer = {};
@@ -970,7 +1037,16 @@ int CALLBACK WinMain(
 						Buffer.Width = GlobalBackBuffer.Width;
 						Buffer.Height = GlobalBackBuffer.Height;
 						Buffer.Pitch = GlobalBackBuffer.Pitch;
-						Game.UpdateAndRender(&GameMemory, Input, &Buffer);
+						Buffer.BytesPerPixel = GlobalBackBuffer.BytesPerPixel;
+						
+						if(Win32State.InputRecordingIndex) {
+							Win32RecordInput(&Win32State, NewInput);
+						}
+						
+						if(Win32State.InputPlayingIndex) {
+							Win32PlaybackInput(&Win32State, NewInput);
+						}
+						Game.UpdateAndRender(&GameMemory, NewInput, &Buffer);
 						
 						LARGE_INTEGER AudioWallClock = Win32GetWallClock();
 						real32 FromBeginToAudioSeconds = Win32GetSecondsElapsed(FlipWallClock, AudioWallClock);
@@ -1156,8 +1232,9 @@ int CALLBACK WinMain(
 											DebugTimeMarkers, DebugTimeMarkerIndex-1, &SoundOutput, TargetSecondsPerFrame);
 
 	#endif
+						HDC DeviceContext = GetDC(Window);
 						Win32DisplayBufferInWindow(DeviceContext, Dimension.Width, Dimension.Height, &GlobalBackBuffer);
-
+						ReleaseDC(Window, DeviceContext);
 	#if	HANDMADE_INTERNAL
 
 						// NOTE(casey) This is debug code
