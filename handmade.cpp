@@ -54,7 +54,7 @@ void GameOutputSound(game_state *GameState, game_sound_output_buffer *SoundBuffe
 	int16 *SampleOut = SoundBuffer->Samples;
 	for(int SampleIndex=0; SampleIndex < SoundBuffer->SampleCount; ++SampleIndex) {
 		//TODO(casey): Draw this out for people
-		#if 0
+		#if HANDMADE_WIN32
 		real32 SineValue = sinf(GameState->tSine);
 		int16 SampleValue = (int16)(SineValue * ToneVolume);
 		#else
@@ -89,7 +89,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 		GameState->tSine = 0.0f;
 		
 		GameState->PlayerX = 100;
-		GameState->PlayerY = 700;
+		GameState->PlayerY = 200;
 		
 		// TODO(casey): This may be more appropriate to do in the platform layer 
 		Memory->IsInitialized = true;
