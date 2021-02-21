@@ -78,10 +78,10 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 		
 		char *Filename = __FILE__;
 		
-		debug_read_file_result File = Memory->DEBUGPlatformReadEntireFile(Filename);
+		debug_read_file_result File = Memory->DEBUGPlatformReadEntireFile(Thread, Filename);
 		if(File.Contents) {
-			Memory->DEBUGPlatformWriteEntireFile("test.out", File.ContentSize, File.Contents);
-			Memory->DEBUGPlatformFreeFileMemory(File.Contents);			
+			Memory->DEBUGPlatformWriteEntireFile(Thread, "test.out", File.ContentSize, File.Contents);
+			Memory->DEBUGPlatformFreeFileMemory(Thread, File.Contents);			
 		}
 		
 				
@@ -129,9 +129,16 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
 	RenderWeirdGradient (Buffer, GameState->BlueOffset, GameState->GreenOffset);
 	RenderPlayer(Buffer, GameState->PlayerX, GameState->PlayerY);
+	
+	RenderPlayer(Buffer, Input->MouseX, Input->MouseY);		
+	for(int ButtonIndex = 0; ButtonIndex < ArrayCount(Input->MouseButtons); ++ButtonIndex) {
+		if(Input->MouseButtons[ButtonIndex].EndedDown) {
+			RenderPlayer(Buffer, 10 + 20 * ButtonIndex, 10);
+		}		
+	}
 }
 
-extern "C" void GameGetSoundSamples(game_memory *Memory, game_sound_output_buffer *SoundBuffer) {
+extern "C" void GameGetSoundSamples(thread_context *Thread, game_memory *Memory, game_sound_output_buffer *SoundBuffer) {
 	// TODO(casey): Allow sample offsets here for more robust platform options
 	game_state *GameState = (game_state *)Memory->PermanentStorage;
 	GameOutputSound(GameState, SoundBuffer, GameState->ToneHz);
