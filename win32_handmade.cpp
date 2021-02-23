@@ -844,7 +844,7 @@ int CALLBACK WinMain(
 	Win32LoadXInput();
 	
 	// This allocates the memory needed for the window based on the width and height
-    Win32ResizeDIBSection(&GlobalBackBuffer, 1280, 720);
+    Win32ResizeDIBSection(&GlobalBackBuffer, 960, 540);
 	
     // Allocate space for a blank Window class in memory
     WNDCLASSA WindowClass = {};
@@ -973,6 +973,7 @@ int CALLBACK WinMain(
 				game_input Input[2] = {};
 				game_input *NewInput = &Input[0];
 				game_input *OldInput = &Input[1];
+				NewInput->SecondsToAdvanceOverUpdate = TargetSecondsPerFrame;
 				
 				LARGE_INTEGER LastCounter = Win32GetWallClock();
 				LARGE_INTEGER FlipWallClock = Win32GetWallClock();

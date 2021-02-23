@@ -65,6 +65,7 @@ struct win32_replay_buffer {
 	void *MemoryBlock;
 	
 };
+
 struct win32_state {
 	uint64 TotalSize;
 	void *GameMemoryBlock;
