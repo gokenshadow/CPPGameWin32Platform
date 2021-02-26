@@ -788,6 +788,7 @@ int CALLBACK WinMain(
 			FILETIME LastDLLWriteTime = {};
 			WIN32_FILE_ATTRIBUTE_DATA GameDLLData;
 			
+			// Get the Timestamp of the time that the ScreenTestGameCode.dll was changed
 			if(GetFileAttributesExA("ScreenTestGameCode.dll", GetFileExInfoStandard, &GameDLLData)) {
 				LastDLLWriteTime = GameDLLData.ftLastWriteTime;
 			}
@@ -805,15 +806,16 @@ int CALLBACK WinMain(
 				// RELOAD GAMECODE IF IT CHANGES
 				// ---------------
 				// ---------------
-				// Get the Timestamp of the last time that the ScreenTestGameCode.dll was changed
+				// Get the New Timestamp of the time that the ScreenTestGameCode.dll was changed
 				FILETIME NewDLLWriteTime = {};
 				if(GetFileAttributesExA("ScreenTestGameCode.dll", GetFileExInfoStandard, &GameDLLData)) {
 					NewDLLWriteTime = GameDLLData.ftLastWriteTime;
 				}
 				
-				// If that Timestamp is 
+				// Compare said New Timestamp with the Old Timestamp (from the last frame)
+				// If it's different, we will reload the Game Code Dll
 				if(CompareFileTime(&NewDLLWriteTime, &LastDLLWriteTime)!=0) {
-					// unload the gamecode
+					// First Unload the Game Code Dll, which will free up our temp Dll file
 					if(GameCodeDLL){
 						FreeLibrary(GameCodeDLL);
 						GameCodeDLL = 0;
@@ -822,43 +824,28 @@ int CALLBACK WinMain(
 					GameUpdateAndRender = 0;
 					
 					if(++GameCodeLoadBuffer>1) {
+						// Then copy the new gamecode to the freed up temp dll file
 						CopyFile("ScreenTestGameCode.dll", "ScreenTestGameCode_temp.dll", FALSE);
+						// Load that temp dll file
 						GameCodeDLL = LoadLibraryA("ScreenTestGameCode_temp.dll");
+						// If the load is successful, point our GameUpdateAndRender function pointer to the GameUpdateAndRender
+						// function in the new dll file
 						if(GameCodeDLL) {
 							GameUpdateAndRender = (game_update_and_render *)GetProcAddress(GameCodeDLL, "GameUpdateAndRender");
 							GameCodeIsValid = (GameUpdateAndRender);
 						}
+						// If the load is unsuccessfull, point our GameUpdateAndRender function pointer to our fake function 
 						if(!GameCodeIsValid) {		
 							GameUpdateAndRender = &GameUpdateAndRenderStub;
 						}
+						// For some reason loading the file on the frame that it gets unloaded will cause Windows to complain
+						// with an error, so I am using this variable to make it so it will actually load the new dll file
+						// on the next frame after this
 						GameCodeLoadBuffer=0;
 					}
-					//Game = Win32LoadGameCode(SourceGameCodeDLLFullPath, TempGameCodeDLLFullPath);
 				}
 				LastDLLWriteTime=NewDLLWriteTime;
 				
-				// Reload the Game Code every 60 frames
-				/*
-				if(LoadCounter++ > 60) {
-					// First Unload the Game Code
-					if(GameCodeDLL) {
-						FreeLibrary(GameCodeDLL);
-						GameCodeDLL = 0;
-						GameUpdateAndRender = &GameUpdateAndRenderStub;
-						GameUpdateSound = &GameUpdateSoundStub;
-					}
-					
-					// Reload the Game Code
-					CopyFile("ScreenTestGameCode.dll", "ScreenTestGameCode_temp.dll", FALSE);
-					GameCodeDLL = LoadLibraryA("ScreenTestGameCode_temp.dll");
-					if(GameCodeDLL){
-						// Re-point that function pointer to the function in our DLL
-						GameUpdateAndRender = (game_update_and_render *)GetProcAddress(GameCodeDLL, "GameUpdateAndRender");
-						GameUpdateSound = (game_update_sound *)GetProcAddress(GameCodeDLL, "GameUpdateSound");
-					}
-					
-					LoadCounter = 0;
-				}*/
 				
 				// FPS Tracking
 				real32 SecondsPerFrame = Win32GetSecondsElapsed(LastCounter,Win32GetWallClock());
