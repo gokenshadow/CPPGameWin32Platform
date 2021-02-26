@@ -59,7 +59,7 @@ static void *GlobalDibMemory;
 
 static int64 GlobalPerfCountFrequency;
 
-// MAKE XInputGetState() SAFE TO USE 
+/* MAKE XInputGetState() SAFE TO USE 
 // We want to be able to call the XInputGetState() function without getting any
 // errors, even if we aren't able to import the library that contains the 
 // definition of this function.
@@ -78,35 +78,40 @@ static int64 GlobalPerfCountFrequency;
 // the C++ compiler into thinking that its previously declared
 // XInputGetState() function is actually our function pointer. We'll 
 // do this in 4 easy steps.
+*/
 
-// Step 1 - Create a Function Type (x_input_get_state) with the same signature 
+/* Step 1 - Create a Function Type (x_input_get_state) with the same signature 
 // (DWORD dwUserIndex, XINPUT_STATE *pState) as the XInputGetState() function.
-// This function type will be used to create the Function Pointer. 
+// This function type will be used to create the Function Pointer.*/ 
 typedef DWORD WINAPI x_input_get_state(DWORD dwUserIndex, XINPUT_STATE *pState);
 
-// Step 2 - Define a fake XInputGetState() function.
-// This function will basically do nothing.
+/* Step 2 - Define a fake XInputGetState() function.
+// This function will basically do nothing.*/
 DWORD WINAPI XInputGetStateStub(DWORD dwUserIndex, XINPUT_STATE *pState) {
 	return(ERROR_DEVICE_NOT_CONNECTED);
 }
 
-// Step 3 - Create a function pointer and point it to our fake XInputGetState()
+/* Step 3 - Create a function pointer and point it to our fake XInputGetState()
 // function.
 // We'll name this pointer XInputGetState_ because XInputGetState is already
-// taken.
+// taken.*/
 static x_input_get_state *XInputGetState_ = XInputGetStateStub;
 
-// Step 4 - Trick the C++ compiler into using our XInputGetState_ function
-// pointer whenever we call the XInputGetState() function.
+/* Step 4 - Trick the C++ compiler into using our XInputGetState_ function
+// pointer whenever we call the XInputGetState() function.*/
 #define XInputGetState XInputGetState_
-// later, we will actually point this function pointer directly to the 
+/* later, we will actually point this function pointer directly to the 
 // XInputGetState() function located in the XInput DLL. This will make it so
-// we don't have to import the Lib file in our code.
+// we don't have to import the Lib file in our code.*/
 
 
-// MAKE XInputSetState() SAFE TO USE
+/* MAKE XInputSetState() SAFE TO USE
 // This is a shorter way to do the same thing we did for XInputGetState() 
-// see "MAKE XINPUTGETSTATE() SAFE TO USE" above for an explanation
+// see "MAKE XINPUTGETSTATE() SAFE TO USE" above for a long explanation.
+// This #define basically tells the compiler that whenever we type 
+// X_INPUT_SET_STATE(WhateverNameWeWantOurFunctionToBe), It will take that
+// text we typed and replace it with 
+// DWORD WINAPI WhateverNameWeWantOurFunctionToBe(DWORD dwUserIndex, XINPUT_VIBRATION *pVibration)*/
 #define X_INPUT_SET_STATE(name) DWORD WINAPI name(DWORD dwUserIndex, XINPUT_VIBRATION *pVibration)
 typedef X_INPUT_SET_STATE(x_input_set_state);
 X_INPUT_SET_STATE(XInputSetStateStub){
@@ -122,20 +127,27 @@ typedef void print_something_cool();
 void PrintSomethingCoolStub () {
 	std::cout << "DLL import for PrintSomethingCool() doesn't work.\n";
 }
-typedef void game_update_and_render(game_offscreen_buffer *Buffer, game_state *GameState);
-void GameUpdateAndRenderStub (game_offscreen_buffer *Buffer,  game_state *GameState) {
+typedef void game_update_and_render(game_offscreen_buffer *Buffer, game_state *GameState, game_controller_input *Controller,
+									game_sound_output_buffer *SoundBuffer);
+void GameUpdateAndRenderStub (game_offscreen_buffer *Buffer,  game_state *GameState, game_controller_input *Controller, 
+							  game_sound_output_buffer *SoundBuffer) {
 	std::cout << "DLL import for GameUpdateAndRender() doesn't work.\n";
 }
+typedef void game_update_sound(game_sound_output_buffer *SoundBuffer);
+void GameUpdateSoundStub (game_sound_output_buffer *SoundBuffer) {
+	std::cout << "DLL import for GameUpdateSound() doesn't work.\n";
+}
 
-
-// Create a Function Type that has the same signature as the 
-// direct_sound_create function in the DirectSound Library. We will use said
+/* Create a Function Type that has the same signature as the direct_sound_create function
+// in the DirectSound Library. 
+// We will use said
 // Function Type to create a Function Pointer named DirectSoundCreate, which
 // we will point to the DirectSoundCreate() function located in dsound.dll.
 // This is totally hacky way to avoid having to use the DirectSound Library
 // by instead importing only the function we need from the DLL file
 // located somewhere in Windows's innards. This will obviously only work on 
 // Windows, but it's still pretty rad.
+*/
 typedef HRESULT WINAPI direct_sound_create(LPCGUID pcGuideDevice, LPDIRECTSOUND *ppDS, LPUNKNOWN pUnkOuter);
 
 // This function will make it easier to think about what we're doing when
@@ -152,13 +164,15 @@ inline real32 Win32GetSecondsElapsed(LARGE_INTEGER Start, LARGE_INTEGER End){
 	return (Result);
 }
 
-// ( v This is NOT the start of the program. v It is a function that windows REQUIRES if you
-// want to open a window. When you create a window class (WNDCLASSA), one of its properties
+/* ( v This is NOT the start of the program. v It is a function that windows REQUIRES if you
+// want to open a window. 
+//When you create a window class (WNDCLASSA), one of its properties
 // will be a reference to this function )
 // This function is here so it can be called when something happens to the window
 // If something happens to a window, it will send a Message to this callback
 // eg. messages = Window resized (WM_SIZE),window clicked on (WM_ACTIVATEAPP), etc.
 // LRESULT CALLBACK is a Long Pointer that points to the start of this function
+*/
 LRESULT CALLBACK Win32MainWindowCallback(
     HWND   Window,
     UINT   Message,
@@ -237,9 +251,9 @@ LRESULT CALLBACK Win32MainWindowCallback(
 
 // v THIS IS THE START OF THE PROGRAM v
 int CALLBACK WinMain(
-    // HINSTANCE - Instance handle of the application. Windows is set up to allocate us
+    /* HINSTANCE - Instance handle of the application. Windows is set up to allocate us
     // our own virtual memory space. The HINSTANCE is the way we tell Windows that we
-    // want to access addresses within that virtual memory
+    // want to access addresses within that virtual memory*/
     HINSTANCE Instance,
     HINSTANCE PrevInstance, // null
     LPSTR CmdLine, // if any parameters are put in command line when the program is run
@@ -249,18 +263,21 @@ int CALLBACK WinMain(
 	::ShowWindow(::GetConsoleWindow(), SW_HIDE);
 	::ShowWindow(::GetConsoleWindow(), SW_SHOW);
 	
-	// Declare a function pointer to a print_something_cool type function
-	print_something_cool *PrintSomethingCool;
-	// Point that function pointer to our fake PrintSomethingCoolStub function
-	PrintSomethingCool = &PrintSomethingCoolStub;
 	
-	// Declare a function pointer to a print_something_cool type function
+	// Filenames for hot reloading
+	char SourceGameCodeDLLFullPath[MAX_PATH] = "C:\\Users\\goken\\cppProjects\\HandmadeHero\\ScreenTest.exe";
+	char TempGameCodeDLLFullPath[MAX_PATH] = "C:\\Users\\goken\\cppProjects\\HandmadeHero\\ScreenTest_temp.exe";
+	
+	
+	// Declare a function pointer to a game_update_and_render type function
 	game_update_and_render *GameUpdateAndRender;
-	// Point that function pointer to our fake PrintSomethingCoolStub function
+	// Point that function pointer to our fake GameUpdateAndRenderStub function
 	GameUpdateAndRender = &GameUpdateAndRenderStub;
 	
-	// See if that function works.
-	PrintSomethingCool();
+	// Declare a function pointer to a game_update_sound type function
+	game_update_sound *GameUpdateSound;
+	// Point that function pointer to our fake GameUpdateSoundStub function
+	GameUpdateSound = &GameUpdateSoundStub;
 	
 	// This is data for FPS and the like
 	LARGE_INTEGER PerfCountFrequencyResult;
@@ -268,8 +285,6 @@ int CALLBACK WinMain(
 	GlobalPerfCountFrequency = PerfCountFrequencyResult.QuadPart;
 	
 	// TODO: explain
-	// Note(Casey): Set the Windows scheduler granularity to 1ms, so that our Sleep()
-	// can be more granular.
 	bool32 SleepIsGranular = false;
 	/*UINT DesiredSchedulerMS = 1;
 	MMRESULT period = timeBeginPeriod(DesiredSchedulerMS);
@@ -315,17 +330,19 @@ int CALLBACK WinMain(
     }
 
 	// Set the screen properties (this could probably be set elsewhere, but here it is for now)
-	int ScreenWidth = 1280;
-	int ScreenHeight = 720;
+	int ScreenWidth = 960;
+	int ScreenHeight = 540;
+	int WindowsWindowWidth = 1280;
+	int WindowsWindowHeight = 720;
 	int BytesPerPixel = 4;
     PointerToBackBuffer->Width = ScreenWidth;
     PointerToBackBuffer->Height = ScreenHeight;  
     PointerToBackBuffer->Pitch = ScreenWidth*BytesPerPixel;
 
-	// Set the DIB properties
+	/* Set the DIB properties
 	// A DIB is like a BMP, datawise. The BITMAPINFO is a struct that contains stuff about that DIB.
 	// Inside BITMAPINFO is the bmiHeader, which will be very much like the
-	// header of a BMP in that it gives info about the format of the data, such as...
+	// header of a BMP in that it gives info about the format of the data, such as...*/
 	PointerToBackBuffer->Info.bmiHeader.biSize = sizeof(PointerToBackBuffer->Info.bmiHeader); // the size of the header itself
     PointerToBackBuffer->Info.bmiHeader.biWidth = PointerToBackBuffer->Width; //the width of the DIB
     PointerToBackBuffer->Info.bmiHeader.biHeight = -PointerToBackBuffer->Height; //the height of the DIB (negative tells Windows to draw top-down, not bottom-up)
@@ -369,8 +386,8 @@ int CALLBACK WinMain(
             WS_OVERLAPPEDWINDOW|WS_VISIBLE, //dwStyle
             CW_USEDEFAULT,                  //X
             CW_USEDEFAULT,                  //Y
-            CW_USEDEFAULT,                  //nWidth
-            CW_USEDEFAULT,                  //nHeight
+            WindowsWindowWidth,                  //nWidth
+            WindowsWindowHeight,                  //nHeight
             0,                              //hWndParent - 0 if only one window
             0,                              //hMenu 0 - if not using any windows menus
             Instance,                       //hInstance - the handle to the app instance
@@ -381,8 +398,16 @@ int CALLBACK WinMain(
 		// game stuff
         if(Window){
 			// This is the framerate we will try to hit
-			int GameUpdateHz = 60;
-			real32 TargetSecondsPerFrame = 1.0f / (real32)GameUpdateHz;			
+			int MonitorRefreshHz = 60;
+			HDC RefreshDC = GetDC(Window);
+			int Win32RefreshRate = GetDeviceCaps(RefreshDC, VREFRESH);
+			ReleaseDC(Window, RefreshDC);
+			
+			if(Win32RefreshRate>1){
+				MonitorRefreshHz = Win32RefreshRate;
+			}
+			real32 GameUpdateHz (MonitorRefreshHz / 2.0f);
+			real32 TargetSecondsPerFrame = 1.0f / (real32)GameUpdateHz;		
 
 			// INITIALZE SOUND
 			// ---------------
@@ -456,39 +481,39 @@ int CALLBACK WinMain(
 			}
 			
 			
-			// The speed at which this wave is read is called the SamplesPerSecond, it's also known as 
+			/* The speed at which this wave is read is called the SamplesPerSecond, it's also known as 
 			// the hz (48000hz, 44100hz, 22000hz, etc)
 			// The higher the SamplesPerSecond, the more data you can fit into a second in sound, and 
 			// the higher quality your sound will be.
 			// We'll set our sound's SamplesPerSecond to 48000hz, since that's the standard for high
-			// quality audio
+			// quality audio*/
 			int SamplesPerSecond = 48000;
 			
-			// Each sample is a particular height at a particular time. That height
+			/* Each sample is a particular height at a particular time. That height
 			// will represent the volume of that sound at that time. The BytesPerSample is how 
 			// granularly you can set that height. We are going to set our BytesPerSample to 2 bytes, 
 			// which is the size of an int16. Since our sound is going to be stereo, we will need it 
-			// to be the size of 2 int16s, which will be 4 bytes total.
+			// to be the size of 2 int16s, which will be 4 bytes total.*/
 			int BytesPerSample = sizeof(int16)*2;
 			
-			// The RunningSampleIndex is a variable we're creating to represent the individual sample 
-			// that the sound card is currently on in our data when it's generating the wave
+			/* The RunningSampleIndex is a variable we're creating to represent the individual sample 
+			// that the sound card is currently on in our data when it's generating the wave*/
 			uint32 RunningSampleIndex = 0; 
 			
 			
-			// SoundBufferSize = how big we want our SoundBuffer to be. We are going to make it as big as 
-			// one second of sound.
+			/* SoundBufferSize = how big we want our SoundBuffer to be. We are going to make it as big as 
+			// one second of sound.*/
 			DWORD SoundBufferSize = SamplesPerSecond*BytesPerSample;
 			
-			// There is always some variability in the timing of the actual hardware we're writing to, so
+			/* There is always some variability in the timing of the actual hardware we're writing to, so
 			// we're going to add a small amount of bytes that will account for that variabliity and
-			// prevent it from messing with our sound. We'll call these bytes the SafetyBytes.
+			// prevent it from messing with our sound. We'll call these bytes the SafetyBytes.*/
 			DWORD SafetyBytes = (SamplesPerSecond*BytesPerSample / GameUpdateHz) / 1;
 			
-			// Alright, now we can import the library.
+			/* Alright, now we can import the library.
 			// Instead of importing the DirectSound Lib file and linking it, which would be annoying 
 			// in MinGW, we will just import the DLL. LoadLibraryA will tell Windows to search 
-			// for the DLL in its inner libraries, I believe, but don't quote me on that.
+			// for the DLL in its inner libraries, I believe, but don't quote me on that.*/
 			HMODULE DSoundLibrary = LoadLibraryA("dsound.dll");
 			
 			// We will only initialize DirectSound if Windows is able to find the library.
@@ -496,14 +521,14 @@ int CALLBACK WinMain(
 				// Get a DirectSound object by grabbing it directly from the dsound DLL
 				direct_sound_create *DirectSoundCreate = (direct_sound_create *)GetProcAddress(DSoundLibrary, "DirectSoundCreate");
 			
-				// For Direct Sound, we need to initialize a Primary Buffer and a Secondary Buffer.
+				/* For Direct Sound, we need to initialize a Primary Buffer and a Secondary Buffer.
 				// The Primary Buffer used to be a way to write data directly into to the sound card itself, 
 				// but at some point, it was decided that writing directly into hardware wasn't something
 				// that should be done anymore, so now the Primary Buffer is just used to set up the format
 				// of the sound. 
 				// The Secondary Buffer will go to the fake address Windows creates for you to virtually access
 				// the sound card. When you put data into the Secondary Buffer, Windows will copy that data 
-				// into the sound card for you.	
+				// into the sound card for you.*/	
 				LPDIRECTSOUND DirectSound;
 				if(DirectSoundCreate && SUCCEEDED(DirectSoundCreate(0, &DirectSound, 0))) {
 					
@@ -628,7 +653,7 @@ int CALLBACK WinMain(
 			*/
 			}
 			
-			// The first thing we need to do is create some pointer that will be
+			// The first thing we need to do is create some pointers that will be
 			// be used for the regions.
 			VOID *Region1;
 			DWORD Region1Size;
@@ -684,9 +709,9 @@ int CALLBACK WinMain(
 			// Alright, let's shove these pointers into the Lock method, and get our
 			// SoundBuffer address, so we can clear the whole thing
 			if(SUCCEEDED(GlobalSoundBuffer->Lock(0, SoundBufferSize, &Region1, &Region1Size, &Region2, &Region2Size, 0 ))) {
-				// Since we're basically grabbing all of the data from 0, this will,
+				/* Since we're basically grabbing all of the data from 0, this will,
 				// in theory, only have to use *Region1, but we're going to loop
-				// through both regions just in case
+				// through both regions just in case*/
 				uint8 *DestSample = (uint8 *)Region1; 
 				for(DWORD ByteIndex=0; ByteIndex < Region1Size; ++ByteIndex) {
 					*DestSample++ = 0; // Clear to 0
@@ -702,21 +727,21 @@ int CALLBACK WinMain(
 			// make random noises because of uncleared data.
 			GlobalSoundBuffer->Play(0, 0, DSBPLAY_LOOPING);	
 			
-			// ALLOCATE PRE-WRITE SOUND GENERATION MEMORY FOR SOUND BUFFER
+			/* ALLOCATE PRE-WRITE SOUND GENERATION MEMORY FOR SOUND BUFFER
 			// This is the memory we are going to use to generate some of our own sound before 
-			// it gets written into the SoundBuffer memory
+			// it gets written into the SoundBuffer memory*/
 			int16 *Samples = (int16 *)VirtualAlloc(0, SoundBufferSize, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
 			
-			// This is just a way we will track if it's our first time through the sound loop, as we will
+			/* This is just a way we will track if it's our first time through the sound loop, as we will
 			// do things slightly different in that case. Once we've hit our first stime through the loop
-			// we will set this value to true 
+			// we will set this value to true*/ 
 			bool SoundIsValid = false;
 	
 			// INITIALIZE VIDEO
 			// ---------------
 			// ---------------
-            // The Device Context is the place in memory where the drawing will go.
-			// v This function v will temporarily grab the Device Context of the Window we've just created, so we can draw into it
+            /* The Device Context is the place in memory where the drawing will go.
+			// v This function v will temporarily grab the Device Context of the Window we've just created, so we can draw into it*/
             HDC DeviceContext = GetDC(Window);
 
 			// Set up variables to make the weird gradient move
@@ -741,13 +766,33 @@ int CALLBACK WinMain(
 			GameCodeDLL = LoadLibraryA("ScreenTestGameCode_temp.dll");
 			if(GameCodeDLL){
 				// Re-point that function pointer to the function in our DLL
-				PrintSomethingCool = (print_something_cool *)GetProcAddress(GameCodeDLL, "PrintSomethingCool");
 				GameUpdateAndRender = (game_update_and_render *)GetProcAddress(GameCodeDLL, "GameUpdateAndRender");
+				GameUpdateSound = (game_update_sound *)GetProcAddress(GameCodeDLL, "GameUpdateSound");
 			}
 			
 			uint32 LoadCounter = 0;
 			
 			game_state GameState = {};
+			
+			
+			// This will be used to give our controller information to the GameCode
+			game_controller_input Controller = {};
+			
+			// This will be used to give our GameCode access to the soundcard
+			game_sound_output_buffer GameSoundBuffer = {};
+			GameSoundBuffer.SamplesPerSecond = SamplesPerSecond;
+			GameSoundBuffer.SampleCount = 0;//RunningSampleIndex;
+			bool GameCodeIsValid;
+			
+			// Store the Last time the game code dll was written
+			FILETIME LastDLLWriteTime = {};
+			WIN32_FILE_ATTRIBUTE_DATA GameDLLData;
+			
+			if(GetFileAttributesExA("ScreenTestGameCode.dll", GetFileExInfoStandard, &GameDLLData)) {
+				LastDLLWriteTime = GameDLLData.ftLastWriteTime;
+			}
+			
+			int GameCodeLoadBuffer = 0;	
 			
 			// START THE PROGRAM LOOP
 			// ------------------------------
@@ -757,14 +802,50 @@ int CALLBACK WinMain(
 			// ------------------------------
             GlobalRunning = true;
 			while(GlobalRunning){
+				// RELOAD GAMECODE IF IT CHANGES
+				// ---------------
+				// ---------------
+				// Get the Timestamp of the last time that the ScreenTestGameCode.dll was changed
+				FILETIME NewDLLWriteTime = {};
+				if(GetFileAttributesExA("ScreenTestGameCode.dll", GetFileExInfoStandard, &GameDLLData)) {
+					NewDLLWriteTime = GameDLLData.ftLastWriteTime;
+				}
+				
+				// If that Timestamp is 
+				if(CompareFileTime(&NewDLLWriteTime, &LastDLLWriteTime)!=0) {
+					// unload the gamecode
+					if(GameCodeDLL){
+						FreeLibrary(GameCodeDLL);
+						GameCodeDLL = 0;
+					}
+					GameCodeIsValid = false;
+					GameUpdateAndRender = 0;
+					
+					if(++GameCodeLoadBuffer>1) {
+						CopyFile("ScreenTestGameCode.dll", "ScreenTestGameCode_temp.dll", FALSE);
+						GameCodeDLL = LoadLibraryA("ScreenTestGameCode_temp.dll");
+						if(GameCodeDLL) {
+							GameUpdateAndRender = (game_update_and_render *)GetProcAddress(GameCodeDLL, "GameUpdateAndRender");
+							GameCodeIsValid = (GameUpdateAndRender);
+						}
+						if(!GameCodeIsValid) {		
+							GameUpdateAndRender = &GameUpdateAndRenderStub;
+						}
+						GameCodeLoadBuffer=0;
+					}
+					//Game = Win32LoadGameCode(SourceGameCodeDLLFullPath, TempGameCodeDLLFullPath);
+				}
+				LastDLLWriteTime=NewDLLWriteTime;
+				
 				// Reload the Game Code every 60 frames
+				/*
 				if(LoadCounter++ > 60) {
 					// First Unload the Game Code
 					if(GameCodeDLL) {
 						FreeLibrary(GameCodeDLL);
 						GameCodeDLL = 0;
-						PrintSomethingCool = &PrintSomethingCoolStub;
 						GameUpdateAndRender = &GameUpdateAndRenderStub;
+						GameUpdateSound = &GameUpdateSoundStub;
 					}
 					
 					// Reload the Game Code
@@ -772,13 +853,20 @@ int CALLBACK WinMain(
 					GameCodeDLL = LoadLibraryA("ScreenTestGameCode_temp.dll");
 					if(GameCodeDLL){
 						// Re-point that function pointer to the function in our DLL
-						PrintSomethingCool = (print_something_cool *)GetProcAddress(GameCodeDLL, "PrintSomethingCool");
 						GameUpdateAndRender = (game_update_and_render *)GetProcAddress(GameCodeDLL, "GameUpdateAndRender");
+						GameUpdateSound = (game_update_sound *)GetProcAddress(GameCodeDLL, "GameUpdateSound");
 					}
 					
 					LoadCounter = 0;
-				}
-				//PrintSomethingCool();
+				}*/
+				
+				// FPS Tracking
+				real32 SecondsPerFrame = Win32GetSecondsElapsed(LastCounter,Win32GetWallClock());
+				real32 FramesPerSecond = 1.0f/ SecondsPerFrame;
+				//std::cout << "FPS: " << FramesPerSecond << "\n";
+				LARGE_INTEGER EndCounter = Win32GetWallClock();
+				LastCounter = EndCounter;
+					
 				// HANDLE WINDOWS MESSAGES
 				// ---------------
 				// ---------------
@@ -786,10 +874,10 @@ int CALLBACK WinMain(
                 // spits out into it
                  MSG Message;
 
-                // The PeekMessage() function will reach into the innards of the window handle we just
+                /* The PeekMessage() function will reach into the innards of the window handle we just
                 // created and grab whatever message (eg window resize, window close, etc..) is queued
                 // up next. It will then send the raw data of that message to the memory we allocated
-                // for the MSG structure above
+                // for the MSG structure above*/
                 while(PeekMessage(&Message,0,0,0,PM_REMOVE)){
                     if(Message.message == WM_QUIT){
                         GlobalRunning = false;
@@ -857,72 +945,61 @@ int CALLBACK WinMain(
 				
 				// HANDLE JOYPAD INPUT
 				// ---------------
-				// ---------------
+				// ---------------	
 				XINPUT_STATE ControllerState;
 				if(XInputGetState(0, &ControllerState) == ERROR_SUCCESS){ 
+					Controller.IsConnected = true;
 					XINPUT_GAMEPAD *Pad = &ControllerState.Gamepad;
 					
+					// Map the buttons from Xinput to our controller	
 					// DPad Buttons
-					if(Pad->wButtons&XINPUT_GAMEPAD_DPAD_UP) {
-						YOffset=-Speed;
-					}
-					if(Pad->wButtons&XINPUT_GAMEPAD_DPAD_DOWN) {
-						YOffset=+Speed;
-					}
-					if(Pad->wButtons&XINPUT_GAMEPAD_DPAD_LEFT) {
-						XOffset=-Speed;
-					}
-					if(Pad->wButtons&XINPUT_GAMEPAD_DPAD_RIGHT) {
-						XOffset=+Speed;
-					}
+					Controller.MoveUp = (bool)(Pad->wButtons&XINPUT_GAMEPAD_DPAD_UP);
+					Controller.MoveDown = (bool)(Pad->wButtons&XINPUT_GAMEPAD_DPAD_DOWN);
+					Controller.MoveLeft = (bool)(Pad->wButtons&XINPUT_GAMEPAD_DPAD_LEFT);
+					Controller.MoveRight = (bool)(Pad->wButtons&XINPUT_GAMEPAD_DPAD_RIGHT);
 					
 					// Action buttons
-					if(Pad->wButtons&XINPUT_GAMEPAD_A) {
-						
-					}
-					if(Pad->wButtons&XINPUT_GAMEPAD_B) {
-						
-					}
-					if(Pad->wButtons&XINPUT_GAMEPAD_X){
-						
-					}
-					if(Pad->wButtons&XINPUT_GAMEPAD_Y) {
-						
-					}
-					if(Pad->wButtons&XINPUT_GAMEPAD_RIGHT_SHOULDER) {
-						
-					}
-					if(Pad->wButtons&XINPUT_GAMEPAD_LEFT_SHOULDER) {
-						
-					}
-					if(Pad->wButtons&XINPUT_GAMEPAD_START) {
-						
-					}
+					Controller.ActionDown = (bool)(Pad->wButtons&XINPUT_GAMEPAD_A);
+					Controller.ActionRight = (bool)(Pad->wButtons&XINPUT_GAMEPAD_B);
+					Controller.ActionLeft = (bool)(Pad->wButtons&XINPUT_GAMEPAD_X);
+					Controller.ActionUp = (bool)(Pad->wButtons&XINPUT_GAMEPAD_Y);
+					Controller.LeftShoulder = (bool)(Pad->wButtons&XINPUT_GAMEPAD_LEFT_SHOULDER);
+					Controller.RightShoulder = (bool)(Pad->wButtons&XINPUT_GAMEPAD_RIGHT_SHOULDER);
+					
+					// Menu buttons
+					Controller.Start = (bool)(Pad->wButtons&XINPUT_GAMEPAD_START);
+					Controller.Back = (bool)(Pad->wButtons&XINPUT_GAMEPAD_BACK);
+					
 					if(Pad->wButtons&XINPUT_GAMEPAD_BACK) {
 						GlobalRunning = false;
 					}
 					
 					
 					// Left Thumbstick
+					Controller.IsAnalog = true;
 					real32 StickAverageX = 0;
-					if(Pad->sThumbLX < - XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE){
-						StickAverageX = (real32)((Pad->sThumbLX + XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE) / (32768.0f - XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE));							
-					} else if (Pad->sThumbLX > XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE) {
-						StickAverageX = (real32)((Pad->sThumbLX + XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE) / (32767.0f - XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE));
+					if(Pad->sThumbLX < - XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE/2){
+						StickAverageX = (real32)((Pad->sThumbLX + XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE/2) / (32768.0f - XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE/2));							
+					} else if (Pad->sThumbLX > XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE/2) {
+						StickAverageX = (real32)((Pad->sThumbLX + XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE/2) / (32767.0f - XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE/2));
 					}
+					Controller.StickAverageX = StickAverageX;
 					real32 StickAverageY = 0;
 					if(Pad->sThumbLY < - XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE){
-						StickAverageY = (real32)((Pad->sThumbLY + XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE) / (32768.0f - XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE));							
-					} else if (Pad->sThumbLY > XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE) {
-						StickAverageY = (real32)((Pad->sThumbLY + XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE) / (32767.0f - XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE));
+						StickAverageY = (real32)((Pad->sThumbLY + XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE/2) / (32768.0f - XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE/2));							
+					} else if (Pad->sThumbLY > XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE/2) {
+						StickAverageY = (real32)((Pad->sThumbLY + XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE/2) / (32767.0f - XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE/2));
 					}
+					Controller.StickAverageY = StickAverageY;
 					
 					XOffset += (int)(8.0f*(StickAverageX));
 					YOffset -= (int)(8.0f*(StickAverageY));
 					ToneHz = 256 + (int)(128.0f*(StickAverageY));
+				} else {
+					Controller.IsConnected = false;
 				}
 				
-				// MAKE THE SOUND HAPPEN
+				// MAKE SOUND HAPPEN
 				// ---------------
 				// ---------------
 				
@@ -1118,64 +1195,34 @@ int CALLBACK WinMain(
 						BytesToWrite = TargetCursor - ByteToLock;
 					}
 					
-					
-					// GENERATE OUR SOUND
-					// As mentioned previously, we will use our own memory we allocated in the *Samples pointer
-					// For now, we will generate a simple sine wave.
-					
-					// The sample count will be set to the amount of data we plan to Lock in the SoundBuffer
-					int SampleCount = BytesToWrite / BytesPerSample;
-					
-					// TODO
-					static real32 tSine=0;
-					
-					// This will be the volume we want our sine wave to hit.
-					int16 ToneVolume = 3000;
-					
-					// This will be the length of a single section of sine wave, in order to make it resonate
-					// at the exact tone we set ToneHz to, we have to divide it by the SamplesPerSecond
-					int WavePeriod = SamplesPerSecond/ToneHz;
-					
-					// Set a pointer to the beginning of our Samples memory
-					int16 *SampleOut = Samples;
-
-					// Loop through our Samples memory and change each sample to the height it would be in 
-					// our sine wave at the current time in the sound
-					for(int SampleIndex=0; SampleIndex < SampleCount; ++SampleIndex) {
-						// There is a formula we can use to generate where a sample would be in a Sine 
-						// wave at a particular point in time. However, since we're starting with zero,
-						// we'll just set it to the sine(0), to start off.
-						// But since we're starting at 0, we can just grab the sign of zero, the first time
-						real32 SineValue = sinf(tSine);
-						int16 SampleValue = (int16)(SineValue * ToneVolume);
-						
-						// TODO: Fill this in later
-						//  int16 int16   int16 int16   int16 int16  ...
-						// [LEFT  RIGHT] [LEFT  RIGHT] [LEFT  RIGHT] ...
-						*SampleOut++ = SampleValue;
-						*SampleOut++ = SampleValue;
-						// Here's the formula I mentioned above: 
-						// Sin( ((2*PI) / WavePeriod) * CurrentTime )
-						tSine += ((2.0f*Pi32) / (real32)WavePeriod)*1.0f;
-						// Normalize the sine
-						if(tSine > 2.0f*Pi32) {
-							tSine -= 2.0f*Pi32;
-						}
+					// UPDATE THE GAME
+					// ---------------
+					// ---------------
+					// Get the Video Data from the game
+					game_offscreen_buffer GameBuffer = {};
+					GameBuffer.Memory = PointerToBackBuffer->Memory;
+					GameBuffer.Width = PointerToBackBuffer->Width;
+					GameBuffer.Height = PointerToBackBuffer->Height;
+					GameBuffer.Pitch = PointerToBackBuffer->Pitch;
+					// Get the Sound Data from the game
+					GameSoundBuffer.Samples = Samples;
+					GameSoundBuffer.SampleCount = BytesToWrite / BytesPerSample;
+					if(GameUpdateAndRender != 0) {
+						GameUpdateAndRender(&GameBuffer, &GameState, &Controller, &GameSoundBuffer);						
 					}
-				
-				
-					// FILL THE SOUND BUFFER WITH OUR GENERATED SOUND
+					
+					/* FILL THE SOUND BUFFER WITH OUR GENERATED SOUND
 					// This is the point where we FINALLY write our sound data to the actual sound card,
 					// (albeit indirectly through Windows's fake Sound Card memory)
 					
 					// We start by shoving those previous Region pointers into the Lock method, which will point 
-					// them to the fake "sound card" area of memory Windows gives us to write into
+					// them to the fake "sound card" area of memory Windows gives us to write into*/
 					if(SUCCEEDED(GlobalSoundBuffer->Lock(ByteToLock, BytesToWrite, &Region1, &Region1Size,&Region2, &Region2Size,0 ))) {	
-						// Then we loop through the memory of the sound card area, while simultaneously looping
+						/* Then we loop through the memory of the sound card area, while simultaneously looping
 						// through the Samples memory of our generated sound, and fill in each individual 16 bit
 						// piece of data, one piece at a time:
 						
-						// First we do it for region1
+						// First we do it for region1*/
 						DWORD Region1SampleCount = Region1Size/BytesPerSample;
 						int16 *DestSample = (int16 *)Region1;
 						int16 *SourceSample = Samples;
@@ -1210,76 +1257,6 @@ int CALLBACK WinMain(
 				// TODO(casey): NOT TESTED YET! PROBABLY BUGGY!!!
 				real32 SecondsElapsedForFrame = WorkSecondsElapsed;
 				
-				// LIMIT THE FPS (TODO: explain)
-				// ---------------
-				// ---------------
-				if(SecondsElapsedForFrame < TargetSecondsPerFrame) {
-					if(SleepIsGranular) {
-						DWORD SleepMS = (DWORD)(1000.0f * (TargetSecondsPerFrame - SecondsElapsedForFrame));
-						if(SleepMS > 0){
-							Sleep(SleepMS);								
-						}
-					}
-					
-					while(SecondsElapsedForFrame < TargetSecondsPerFrame) {
-						SecondsElapsedForFrame = Win32GetSecondsElapsed(LastCounter, Win32GetWallClock());
-					}						
-				} else {
-					//TODO(casey): MISSED FRAME RATE!
-					//TODO(casey): Logging
-					//std::cout << "Missed a frame!" << "\n";
-				}
-				
-				real32 SecondsPerFrame = Win32GetSecondsElapsed(LastCounter,Win32GetWallClock());
-				real32 FramesPerSecond = 1.0f/ SecondsPerFrame;
-				//std::cout << "FPS: " << FramesPerSecond << "\n";
-				//printf("FPS: %f\n", FramesPerSecond);
-				LARGE_INTEGER EndCounter = Win32GetWallClock();
-				LastCounter = EndCounter;
-				
-				// Get the Video Data from the game
-				game_offscreen_buffer GameBuffer = {};
-				GameBuffer.Memory = PointerToBackBuffer->Memory;
-				GameBuffer.Width = PointerToBackBuffer->Width;
-				GameBuffer.Height = PointerToBackBuffer->Height;
-				GameBuffer.Pitch = PointerToBackBuffer->Pitch;	
-				GameUpdateAndRender(&GameBuffer, &GameState);
-				
-				
-				// RENDER A WEIRD GRADIENT THING
-				// ---------------
-				// ---------------
-				/*
-				uint8 *Row = (uint8*)GlobalBackBuffer.Memory;
-				for(int Y = 0; Y<GlobalBackBuffer.Height; ++Y){
-					uint32 *Pixel = (uint32 *)Row;
-					for(int X = 0; X < GlobalBackBuffer.Width;
-					++X) {
-					
-							//Pixel in Memory: BB GG RR xx
-							//LITTLE ENDIAN ARCHITECTURE
-
-							//0x xxBBGGRR
-					
-					   uint8 Blue = (X + XOffset);
-					   uint8 Green = (Y + YOffset);
-					   uint8 Red = (X + XOffset);
-
-					   
-						// Memory:     BB GG RR xx
-						// Register:   xx RR GG BB
-					   
-
-						*Pixel++ = ((Red << 16) | (Green << 16) | Blue);
-					}
-					Row += GlobalBackBuffer.Pitch;
-				}
-
-				// Move the weird gradient from Right to left
-				XOffset+=XSpeed;
-				YOffset+=YSpeed;
-				*/
-				
 				// DISPLAY BUFFER IN WINDOW
 				// ---------------
 				// ---------------
@@ -1300,7 +1277,7 @@ int CALLBACK WinMain(
 				// StretchDIBits takes the color data (what colors the individual pixels are) of an image
 				// And puts it into a destination
 				StretchDIBits(DeviceContext,
-								0, 0, WindowWidth, WindowHeight,
+								0, 0, PointerToBackBuffer->Width, PointerToBackBuffer->Height,
 								0, 0, PointerToBackBuffer->Width, PointerToBackBuffer->Height,
 								PointerToBackBuffer->Memory,
 								&PointerToBackBuffer->Info,
@@ -1313,6 +1290,26 @@ int CALLBACK WinMain(
 				// Commenting this out doesn't seem to negatively effect the program, so I assume that since this program only gets the DC once, it will
 				// be forced to release that DC when you exit the program
 				// ReleaseDC(Window, DeviceContext);
+				// LIMIT THE FPS (TODO: explain)
+				// ---------------
+				// ---------------
+				
+				if(SecondsElapsedForFrame < TargetSecondsPerFrame) {
+					if(SleepIsGranular) {
+						DWORD SleepMS = (DWORD)(1000.0f * (TargetSecondsPerFrame - SecondsElapsedForFrame));
+						if(SleepMS > 0){
+							Sleep(SleepMS);								
+						}
+					}
+					//std::cout << "\nO:";
+					while(SecondsElapsedForFrame < TargetSecondsPerFrame) {
+						//std::cout << "x";
+						SecondsElapsedForFrame = Win32GetSecondsElapsed(LastCounter, Win32GetWallClock());
+					}						
+				} else {
+					std::cout << "missed frame\n";
+					// Missed frame rate logging
+				}
 
             }
 			::ShowWindow(::GetConsoleWindow(), SW_SHOW);

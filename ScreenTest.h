@@ -18,6 +18,50 @@ struct game_state {
 	real32 tSine;
 	int XSpeed;
 	int YSpeed;
+	int ToneLevel;
+};
+
+struct game_sound_output_buffer {
+	int SamplesPerSecond;
+	int SampleCount;
+	int16 *Samples;
+};
+
+struct game_button_state {
+	int HalfTransitionCount;
+	bool32 EndedDown;
+};
+
+struct game_controller_input {
+	bool32 IsConnected;
+	bool32 IsAnalog;
+	real32 StickAverageX;
+	real32 StickAverageY;
+	
+	union {
+		game_button_state Buttons[12];
+		struct {
+			bool MoveUp;
+			bool MoveDown;
+			bool MoveLeft;
+			bool MoveRight;
+			
+			bool ActionUp;
+			bool ActionDown;
+			bool ActionLeft;
+			bool ActionRight;
+			
+			bool LeftShoulder;
+			bool RightShoulder;		
+			
+			bool Back;
+			bool Start;
+			
+			// NOTE(casey): All buttons must be added above this line
+			
+			game_button_state Terminator;
+		};
+	};
 };
 
 struct game_memory {
