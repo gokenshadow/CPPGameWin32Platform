@@ -121,6 +121,17 @@ static x_input_set_state *XInputSetState_ = XInputSetStateStub;
 #define XInputSetState XInputSetState_
 
 
+#define TIME_BEGIN_PERIOD(name) MMRESULT name(UINT uPeriod)
+typedef TIME_BEGIN_PERIOD(time_begin_period);
+TIME_BEGIN_PERIOD(TimeBeginPeriodStub){
+	return TIMERR_NOCANDO;
+}
+static time_begin_period *timeBeginPeriod_ = TimeBeginPeriodStub;
+#define timeBeginPeriod timeBeginPeriod_
+
+
+//winmm.dll
+
 //CopyFile("PrintSomethingCool.dll", "PrintSomethingCool_Temp.dll", FALSE); 
 // For testing DLL import
 typedef void print_something_cool();
@@ -199,6 +210,7 @@ LRESULT CALLBACK Win32MainWindowCallback(
 		// WM_PAINT is the event that happens when the window starts to draw. It will rehappen every time
 		// the user messes with the window (resizes it, moves it around, unminimizes it, etc)
         case WM_PAINT:{
+			std::cout << "WM_PAINT" << "\n";
             // Get a pointer to global backbuffer
 			win32_offscreen_buffer * PointerToBackBuffer = &GlobalBackBuffer;
 
@@ -229,7 +241,7 @@ LRESULT CALLBACK Win32MainWindowCallback(
 			// And puts it into a destination. In this case, that destination will be the back
 			// buffer
 			StretchDIBits(DeviceContext,
-							0, 0, Width, Height,
+							0, 0, PointerToBackBuffer->Width, PointerToBackBuffer->Height,
 							0, 0, PointerToBackBuffer->Width, PointerToBackBuffer->Height,
 							PointerToBackBuffer->Memory,
 							&PointerToBackBuffer->Info,
@@ -285,14 +297,21 @@ int CALLBACK WinMain(
 	GlobalPerfCountFrequency = PerfCountFrequencyResult.QuadPart;
 	
 	// TODO: explain
+	HMODULE TimeBeginPeriodLibrary = LoadLibraryA("winmm.dll");
+	if(TimeBeginPeriodLibrary){
+		std::cout << "got it\n";
+		timeBeginPeriod = (time_begin_period *)GetProcAddress(TimeBeginPeriodLibrary, "timeBeginPeriod");
+	}
 	bool32 SleepIsGranular = false;
-	/*UINT DesiredSchedulerMS = 1;
+	UINT DesiredSchedulerMS = 1;
 	MMRESULT period = timeBeginPeriod(DesiredSchedulerMS);
-	bool32 SleepIsGranular = false;
+	//std::cout << "MMRESULT:" << TIMERR_NOCANDO << "\n";
 	if(period==TIMERR_NOERROR) {
 		SleepIsGranular = true;
-	}*/
+	}
 	//bool32 SleepIsGranular = (timeBeginPeriod(DesiredSchedulerMS) == TIMERR_NOERROR);
+	
+	//timeBeginPeriod(1);
 	
 	// SET UP THE GAMEPAD
 	// ---------------
@@ -406,8 +425,8 @@ int CALLBACK WinMain(
 			if(Win32RefreshRate>1){
 				MonitorRefreshHz = Win32RefreshRate;
 			}
-			real32 GameUpdateHz (MonitorRefreshHz / 2.0f);
-			real32 TargetSecondsPerFrame = 1.0f / (real32)GameUpdateHz;		
+			static double GameUpdateHz (MonitorRefreshHz / 2.0f);
+			double TargetSecondsPerFrame = 1.0f / (double)GameUpdateHz;		
 
 			// INITIALZE SOUND
 			// ---------------
@@ -823,7 +842,6 @@ int CALLBACK WinMain(
 					GameCodeIsValid = false;
 					GameUpdateAndRender = 0;
 					
-					if(++GameCodeLoadBuffer>1) {
 						// Then copy the new gamecode to the freed up temp dll file
 						CopyFile("ScreenTestGameCode.dll", "ScreenTestGameCode_temp.dll", FALSE);
 						// Load that temp dll file
@@ -838,6 +856,7 @@ int CALLBACK WinMain(
 						if(!GameCodeIsValid) {		
 							GameUpdateAndRender = &GameUpdateAndRenderStub;
 						}
+					if(++GameCodeLoadBuffer>1) {
 						// For some reason loading the file on the frame that it gets unloaded will cause Windows to complain
 						// with an error, so I am using this variable to make it so it will actually load the new dll file
 						// on the next frame after this
@@ -846,13 +865,6 @@ int CALLBACK WinMain(
 				}
 				LastDLLWriteTime=NewDLLWriteTime;
 				
-				
-				// FPS Tracking
-				real32 SecondsPerFrame = Win32GetSecondsElapsed(LastCounter,Win32GetWallClock());
-				real32 FramesPerSecond = 1.0f/ SecondsPerFrame;
-				//std::cout << "FPS: " << FramesPerSecond << "\n";
-				LARGE_INTEGER EndCounter = Win32GetWallClock();
-				LastCounter = EndCounter;
 					
 				// HANDLE WINDOWS MESSAGES
 				// ---------------
@@ -992,7 +1004,7 @@ int CALLBACK WinMain(
 				
 				// We'll need this for timing stuff
 				LARGE_INTEGER AudioWallClock = Win32GetWallClock();
-				real32 FromBeginToAudioSeconds = Win32GetSecondsElapsed(FlipWallClock, AudioWallClock);
+				double FromBeginToAudioSeconds = Win32GetSecondsElapsed(FlipWallClock, AudioWallClock);
 				
 				// Allocate space on the stack for the PlayCursor 
 				DWORD PlayCursor;
@@ -1147,7 +1159,7 @@ int CALLBACK WinMain(
 					DWORD ExpectedSoundBytesPerFrame = (SamplesPerSecond * BytesPerSample) / GameUpdateHz;
 					
 					
-					real32 SecondsLeftUntilFlip = (TargetSecondsPerFrame - FromBeginToAudioSeconds);					
+					double SecondsLeftUntilFlip = (TargetSecondsPerFrame - FromBeginToAudioSeconds);					
 					DWORD ExpectedBytesUntilFlip = (DWORD)((SecondsLeftUntilFlip/TargetSecondsPerFrame)*(real32)ExpectedSoundBytesPerFrame);
 					DWORD ExpectedFrameBoundaryByte = PlayCursor + ExpectedSoundBytesPerFrame;
 					
@@ -1239,10 +1251,40 @@ int CALLBACK WinMain(
 				
 				
 				LARGE_INTEGER WorkCounter = Win32GetWallClock();
-				real32 WorkSecondsElapsed = Win32GetSecondsElapsed(LastCounter, WorkCounter);
+				double SecondsElapsedForFrame = Win32GetSecondsElapsed(LastCounter, WorkCounter);
 				
-				// TODO(casey): NOT TESTED YET! PROBABLY BUGGY!!!
-				real32 SecondsElapsedForFrame = WorkSecondsElapsed;
+				
+				// LIMIT THE FPS (TODO: explain)
+				// ---------------
+				// ---------------
+				if(SecondsElapsedForFrame < TargetSecondsPerFrame) {
+					if(SleepIsGranular) {
+						DWORD SleepMS = (DWORD)(800.0f * (TargetSecondsPerFrame - SecondsElapsedForFrame));
+						if(SleepMS > 0){
+							Sleep(SleepMS);								
+						}
+					}
+					#if 0
+					#endif
+					//std::cout << "\nO:";
+					while(SecondsElapsedForFrame < TargetSecondsPerFrame) {
+						//std::cout << "x";
+						SecondsElapsedForFrame = Win32GetSecondsElapsed(LastCounter, Win32GetWallClock());
+					}
+				LARGE_INTEGER TestCounter = Win32GetWallClock();
+				double SecondsElapsedSinceSleep = Win32GetSecondsElapsed(WorkCounter, TestCounter);					
+				//std::cout << SecondsElapsedSinceSleep << "\n\n";					
+				} else {
+					std::cout << "missed frame\n";
+					// Missed frame rate logging
+				}
+				
+				// FPS Tracking
+				real32 SecondsPerFrame = Win32GetSecondsElapsed(LastCounter,Win32GetWallClock());
+				double FramesPerSecond = 1.0d/ SecondsPerFrame;
+				//std::cout << "FPS: " << FramesPerSecond << "\n";
+				LARGE_INTEGER EndCounter = Win32GetWallClock();
+				LastCounter = EndCounter;
 				
 				// DISPLAY BUFFER IN WINDOW
 				// ---------------
@@ -1260,7 +1302,7 @@ int CALLBACK WinMain(
 				// Now we're getting the width and height (which is all we want) from that RECT
 				WindowWidth = ClientRect.right - ClientRect.left;
 				WindowHeight = ClientRect.bottom - ClientRect.top;
-
+				
 				// StretchDIBits takes the color data (what colors the individual pixels are) of an image
 				// And puts it into a destination
 				StretchDIBits(DeviceContext,
@@ -1271,32 +1313,12 @@ int CALLBACK WinMain(
 								DIB_RGB_COLORS,
 								SRCCOPY
 								);
-								
 				// It is said that if you Get a DC (Device Context), you must release it when you're done with it. I have no idea why. 
 				// Probably a memory allocation thing.
 				// Commenting this out doesn't seem to negatively effect the program, so I assume that since this program only gets the DC once, it will
 				// be forced to release that DC when you exit the program
 				// ReleaseDC(Window, DeviceContext);
-				// LIMIT THE FPS (TODO: explain)
-				// ---------------
-				// ---------------
 				
-				if(SecondsElapsedForFrame < TargetSecondsPerFrame) {
-					if(SleepIsGranular) {
-						DWORD SleepMS = (DWORD)(1000.0f * (TargetSecondsPerFrame - SecondsElapsedForFrame));
-						if(SleepMS > 0){
-							Sleep(SleepMS);								
-						}
-					}
-					//std::cout << "\nO:";
-					while(SecondsElapsedForFrame < TargetSecondsPerFrame) {
-						//std::cout << "x";
-						SecondsElapsedForFrame = Win32GetSecondsElapsed(LastCounter, Win32GetWallClock());
-					}						
-				} else {
-					std::cout << "missed frame\n";
-					// Missed frame rate logging
-				}
 
             }
 			::ShowWindow(::GetConsoleWindow(), SW_SHOW);

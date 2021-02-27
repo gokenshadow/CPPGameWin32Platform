@@ -10,6 +10,8 @@ struct game_offscreen_buffer {
     int Pitch;
 };
 
+void b();
+
 struct game_state {
 	bool32 IsInitialized;
 	int ToneHz;

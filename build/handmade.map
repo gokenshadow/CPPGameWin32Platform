@@ -1,6 +1,6 @@
  handmade
 
- Timestamp is 6036e887 (Wed Feb 24 19:00:07 2021)
+ Timestamp is 6039f1c5 (Sat Feb 27 02:16:21 2021)
 
  Preferred load address is 0000000180000000
 
@@ -21,11 +21,11 @@
  0002:00000ad0 00000110H .CRT$XTZ                DATA
  0002:00000be0 00025138H .rdata                  DATA
  0002:00025d18 0000060cH .rdata$r                DATA
- 0002:00026324 00000184H .rdata$zzzdbg           DATA
- 0002:000264a8 00000110H .rtc$IAA                DATA
- 0002:000265b8 00000110H .rtc$IZZ                DATA
- 0002:000266c8 00000110H .rtc$TAA                DATA
- 0002:000267d8 00000118H .rtc$TZZ                DATA
+ 0002:00026324 0000018cH .rdata$zzzdbg           DATA
+ 0002:000264b0 00000110H .rtc$IAA                DATA
+ 0002:000265c0 00000110H .rtc$IZZ                DATA
+ 0002:000266d0 00000110H .rtc$TAA                DATA
+ 0002:000267e0 00000110H .rtc$TZZ                DATA
  0002:000268f0 00006c00H .xdata                  DATA
  0002:0002d4f0 000001a0H .xdata$x                DATA
  0002:0002d690 00000187H .edata                  DATA
@@ -4072,10 +4072,10 @@
  0002:000261b0       ??_R3bad_exception@std@@8  00000001800e21b0     libvcruntimed:frame.obj
  0002:000261c8       ??_R2bad_exception@std@@8  00000001800e21c8     libvcruntimed:frame.obj
  0002:000261e0       ??_R1A@?0A@EA@bad_exception@std@@8 00000001800e21e0     libvcruntimed:frame.obj
- 0002:000264a8       __rtc_iaa                  00000001800e24a8     LIBCMTD:_initsect_.obj
- 0002:000265b8       __rtc_izz                  00000001800e25b8     LIBCMTD:_initsect_.obj
- 0002:000266c8       __rtc_taa                  00000001800e26c8     LIBCMTD:_initsect_.obj
- 0002:000267d8       __rtc_tzz                  00000001800e27d8     LIBCMTD:_initsect_.obj
+ 0002:000264b0       __rtc_iaa                  00000001800e24b0     LIBCMTD:_initsect_.obj
+ 0002:000265c0       __rtc_izz                  00000001800e25c0     LIBCMTD:_initsect_.obj
+ 0002:000266d0       __rtc_taa                  00000001800e26d0     LIBCMTD:_initsect_.obj
+ 0002:000267e0       __rtc_tzz                  00000001800e27e0     LIBCMTD:_initsect_.obj
  0002:0002d4f0       _TI2?AVbad_exception@std@@ 00000001800e94f0     libvcruntimed:frame.obj
  0002:0002d510       _CTA2?AVbad_exception@std@@ 00000001800e9510     libvcruntimed:frame.obj
  0002:0002d528       _CT??_R0?AVbad_exception@std@@@8??0bad_exception@std@@QEAA@AEBV01@@Z24 00000001800e9528     libvcruntimed:frame.obj
