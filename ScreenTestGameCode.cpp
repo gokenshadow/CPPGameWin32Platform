@@ -53,22 +53,20 @@ void b () {
 }
 
 extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_state *GameState,
-									game_controller_input *Controller, game_sound_output_buffer *SoundBuffer) {
+									game_controller_input *Controller, game_sound_output_buffer *SoundBuffer,
+									game_memory *Memory) {
 	static byte *pixels;
-	static int32 width;
-	static int32 height;
-	static int32 bytesPerPixel;
-	static int32 Width;
-	static int32 Height;
-	static int32 BytesPerPixel;
-	static int32 newSize;
-	static void *imageMemory;
-	static void *NewImageData;
-	static uint8 *ImageData;
 	static uint32 ImageX =100;
 	static uint32 ImageY =0;
+	
+	static bmp_image_data TestImageData;
+	/*static int32 TestWidth;
+	static int32 TestHeight;
+	static int32 TestBytesPerPixel;
+	static uint8 *TestImageData;*/
 
 	if(GameState->IsInitialized == false) {
+		
 		GameState->ToneHz = 256;
 		GameState->tSine = 0.0f;
 		GameState->XSpeed = 2;
@@ -76,64 +74,22 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_state *G
 		GameState->IsInitialized = true;
 		GameState->ToneLevel = 256;
 		
-		// LOAD A BMP IMAGE INTO MEMORY
-		// ---------------
-		// ---------------
-		FILE *filePointer = fopen("image.bmp", "rb");
-		// get file size
-		uint32 FileSize;
-		fseek(filePointer, 2, SEEK_SET);
-		fread(&FileSize, sizeof(uint32), 1, filePointer);
-		std::cout << "FileSize:" << FileSize << "\n";
-
-		// get the data offset
-		int32 DataOffset;
-		fseek(filePointer, DATA_OFFSET_OFFSET, SEEK_SET);
-		fread(&DataOffset, sizeof(uint32), 1, filePointer);
-		fseek(filePointer, DataOffset, SEEK_SET);
-		std::cout << "DataOffset:" << DataOffset << "\n";
-
-		// get width /height
-		fseek(filePointer, WIDTH_OFFSET, SEEK_SET);
-		fread(&Width, 4, 1, filePointer);
-		fseek(filePointer, HEIGHT_OFFSET, SEEK_SET);
-		fread(&Height, 4, 1, filePointer);
-		std::cout << "" << "Width:" << Width << " Height:" << Height << "\n";
-
-		// get the bytesperpixel;
-		int16 BitsPerPixel;
-		fseek(filePointer, BITS_PER_PIXEL_OFFSET, SEEK_SET);
-		fread(&BitsPerPixel, 2, 1, filePointer);
-		BytesPerPixel = ((int32)BitsPerPixel) / 8;
-		std::cout << "BytesPerPixel:" << BytesPerPixel << "\n";
-
-		// get the padded width
-		uint32 PaddedWidth = (uint32)(ceil((float)Width / 4.0)) * 4;
-		std::cout << "PaddedWidth:" << PaddedWidth << "\n";
-
-		// get the actual size of the data
-		uint32 ActualDataSize = PaddedWidth*Height*BytesPerPixel;
-
-		// get the size of the Data we want
-		uint32 DataSize = Width*Height*BytesPerPixel;
-		std::cout << "DataSize:" << DataSize << "\n";
+		bmp_image_data Tests[100]; 
 		
-		// get the size of the final Data
-		uint32 FinalDataSize = Width*Height*4;
-
-		// allocate space for the data we want
-		ImageData = (uint8*)malloc(DataSize);
+		// Grab a bunch of images and shove them into memory
 		
-		// Write the image data to the allocated 
-		
-		// Grab the last row of the memory we allocated
-		uint8 *CurrentRow = ImageData+((Height-1)*Width*BytesPerPixel);
-		for (int i = 0; i < Height; i++)
-		{
-			fseek(filePointer, DataOffset+(i*PaddedWidth*BytesPerPixel), SEEK_SET);
-			fread(CurrentRow, 1, Width*BytesPerPixel, filePointer);
-			CurrentRow -= Width*BytesPerPixel;
+		for(int i=0; i<100; i++){
+			Tests[i] = Memory->GetBmpImageData("image2.bmp");
 		}
+		b();
+		// Remove all those images from memory
+		for(int i=0; i<100; i++){
+			Memory->ClearBmpImageData(Tests[i]);
+		}
+		
+		
+		TestImageData = Memory->GetBmpImageData("image2.bmp");
+		
 
 	}
 
@@ -193,30 +149,33 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_state *G
 	// DRAW A BMP IMAGE ON THE SCREEN
 	// ---------------
 	// ---------------
-	if(ImageX<Buffer->Width*BytesPerPixel) {
+	if(ImageX<Buffer->Width*TestImageData.BytesPerPixel) {
 		ImageX = 0;
 	}
-	if(ImageX>Buffer->Width*BytesPerPixel) {
-		ImageX = Buffer->Width*BytesPerPixel;
+	if(ImageX>Buffer->Width*TestImageData.BytesPerPixel) {
+		ImageX = Buffer->Width*TestImageData.BytesPerPixel;
 	}
-	if(ImageY<Buffer->Width*BytesPerPixel) {
+	if(ImageY<Buffer->Width*TestImageData.BytesPerPixel) {
 		ImageY = 0;
 	}
-	if(ImageY>Buffer->Width*BytesPerPixel) {
-		ImageY = Buffer->Width*BytesPerPixel;
+	if(ImageY>Buffer->Width*TestImageData.BytesPerPixel) {
+		ImageY = Buffer->Width*TestImageData.BytesPerPixel;
 	}
 	
 	#if 0
 	#endif
+	// DISPLAY AN IMAGE
+	// ---------------
+	// ---------------
 	uint32 BackgroundColor = 0xFFFFFFFF;
 	uint8 *BmpRow = (uint8*)Buffer->Memory;
-	uint32 ImagePitch = Width*BytesPerPixel;
+	uint32 ImagePitch = TestImageData.Width*TestImageData.BytesPerPixel;
 	uint32 DIBPixel;
-	uint8 *DataImageRow = (uint8*)ImageData;
-	for(int Y = 0; Y<Height; ++Y){
+	uint8 *DataImageRow = (uint8*)TestImageData.ImageData;
+	for(int Y = 0; Y<TestImageData.Height; ++Y){
 		bmp_pixel *BMPPixel = (bmp_pixel*)DataImageRow;
 		uint32 *Pixel = (uint32 *)BmpRow;
-		for(int X = 0; X < Width; ++X) {
+		for(int X = 0; X < TestImageData.Width; ++X) {
 			//Convert the BMP Pixel (24bit) into a DIB Pixel (32 bit)
 			DIBPixel = (0xFF << 24) |(BMPPixel->red << 16) | (BMPPixel->green<<8) | (BMPPixel->blue);
 			// If the current Pixel we're on is our chosen background color

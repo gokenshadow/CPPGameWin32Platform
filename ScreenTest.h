@@ -12,6 +12,19 @@ struct game_offscreen_buffer {
 
 void b();
 
+
+struct bmp_image_data {
+	uint32 Width;
+	uint32 Height;
+	uint32 BytesPerPixel;
+	uint8 *ImageData;
+};
+
+#define GET_BMP_IMAGE_DATA(name) bmp_image_data name(const char *Filename)
+typedef GET_BMP_IMAGE_DATA(get_bmp_image_data);
+#define CLEAR_BMP_IMAGE_DATA(name) void name(bmp_image_data BmpToClear)
+typedef CLEAR_BMP_IMAGE_DATA(clear_bmp_image_data);
+
 struct game_state {
 	bool32 IsInitialized;
 	int ToneHz;
@@ -74,6 +87,8 @@ struct game_memory {
 	uint64 TransientStorageSize;
 	void *TransientStorage; // NOTE(casey): REQUIRED to be cleared to zero at startup
 	
+	get_bmp_image_data *GetBmpImageData;
+	clear_bmp_image_data *ClearBmpImageData;
 };
 
 #define WIN32_HANDMADE_H

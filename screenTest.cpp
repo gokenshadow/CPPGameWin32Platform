@@ -139,9 +139,9 @@ void PrintSomethingCoolStub () {
 	std::cout << "DLL import for PrintSomethingCool() doesn't work.\n";
 }
 typedef void game_update_and_render(game_offscreen_buffer *Buffer, game_state *GameState, game_controller_input *Controller,
-									game_sound_output_buffer *SoundBuffer);
+									game_sound_output_buffer *SoundBuffer, game_memory *Memory);
 void GameUpdateAndRenderStub (game_offscreen_buffer *Buffer,  game_state *GameState, game_controller_input *Controller, 
-							  game_sound_output_buffer *SoundBuffer) {
+							  game_sound_output_buffer *SoundBuffer, game_memory *Memory) {
 	std::cout << "DLL import for GameUpdateAndRender() doesn't work.\n";
 }
 typedef void game_update_sound(game_sound_output_buffer *SoundBuffer);
@@ -160,6 +160,84 @@ void GameUpdateSoundStub (game_sound_output_buffer *SoundBuffer) {
 // Windows, but it's still pretty rad.
 */
 typedef HRESULT WINAPI direct_sound_create(LPCGUID pcGuideDevice, LPDIRECTSOUND *ppDS, LPUNKNOWN pUnkOuter);
+
+//This function will be for opening BMP files
+GET_BMP_IMAGE_DATA(GetBmpImageData) {
+	bmp_image_data Result = {};
+	FILE *filePointer = fopen(Filename, "rb");
+	// get file size
+	uint32 FileSize;
+	fseek(filePointer, 2, SEEK_SET);
+	fread(&FileSize, sizeof(uint32), 1, filePointer);
+	std::cout << "FileSize:" << FileSize << "\n";
+	
+	// get the data offset (in BMP It is at 0x000A)
+	uint32 DataOffset;
+	fseek(filePointer, 0x000A, SEEK_SET);
+	fread(&DataOffset, sizeof(uint32), 1, filePointer);
+	fseek(filePointer, DataOffset, SEEK_SET);
+	std::cout << "DataOffset:" << DataOffset << "\n";
+
+	// get width (0x0012 in BMP) /height (0x0016 in BMP)
+	uint32 Width;
+	fseek(filePointer, 0x0012, SEEK_SET);
+	fread(&Width, 4, 1, filePointer);
+	uint32 Height;
+	fseek(filePointer, 0x0016, SEEK_SET);
+	fread(&Height, 4, 1, filePointer);
+	std::cout << "" << "Width:" << Width << " Height:" << Height << "\n";
+
+	// get the bytesperpixel (0x001C in BMP)
+	uint32 BytesPerPixel;
+	int16 BitsPerPixel;
+	fseek(filePointer, 0x001C, SEEK_SET);
+	fread(&BitsPerPixel, 2, 1, filePointer);
+	BytesPerPixel = ((int32)BitsPerPixel) / 8;
+	std::cout << "BytesPerPixel:" << BytesPerPixel << "\n";
+
+	// get the padded width
+	uint32 PaddedWidth = (uint32)(ceil((float)Width / 4.0)) * 4;
+	std::cout << "PaddedWidth:" << PaddedWidth << "\n";
+
+	// get the actual size of the data
+	uint32 ActualDataSize = PaddedWidth*Height*BytesPerPixel;
+
+	// get the size of the Data we want
+	uint32 DataSize = Width*Height*BytesPerPixel;
+	std::cout << "DataSize:" << DataSize << "\n";
+	
+	// get the size of the final Data
+	uint32 FinalDataSize = Width*Height*4;
+	
+	// get a pointer to point to some allocated
+	// space for our image data
+	uint8 *ImageData;
+	
+	// allocate space for the data we want
+	ImageData = (uint8*)malloc(DataSize);
+	
+	// Write the image data to the allocated 
+	
+	// Grab the last row of the memory we allocated
+	uint8 *CurrentRow = ImageData+((Height-1)*Width*BytesPerPixel);
+	for (int i = 0; i < Height; i++)
+	{
+		fseek(filePointer, DataOffset+(i*PaddedWidth*BytesPerPixel), SEEK_SET);
+		fread(CurrentRow, 1, Width*BytesPerPixel, filePointer);
+		CurrentRow -= Width*BytesPerPixel;
+	}
+	Result.Width = Width;
+	Result.Height = Height;
+	Result.BytesPerPixel = BytesPerPixel;
+	Result.ImageData = ImageData;
+	return Result;
+}
+
+// This function will be for clearing the memory used after being done
+// with open BMP files
+CLEAR_BMP_IMAGE_DATA(ClearBmpImageData) {
+	free(BmpToClear.ImageData);
+}
 
 // This function will make it easier to think about what we're doing when
 // we're measuring time.
@@ -793,6 +871,9 @@ int CALLBACK WinMain(
 			
 			game_state GameState = {};
 			
+			game_memory GameMemory = {};
+			GameMemory.GetBmpImageData = &GetBmpImageData;
+			GameMemory.ClearBmpImageData = &ClearBmpImageData;
 			
 			// This will be used to give our controller information to the GameCode
 			game_controller_input Controller = {};
@@ -1207,7 +1288,7 @@ int CALLBACK WinMain(
 					GameSoundBuffer.Samples = Samples;
 					GameSoundBuffer.SampleCount = BytesToWrite / BytesPerSample;
 					if(GameUpdateAndRender != 0) {
-						GameUpdateAndRender(&GameBuffer, &GameState, &Controller, &GameSoundBuffer);						
+						GameUpdateAndRender(&GameBuffer, &GameState, &Controller, &GameSoundBuffer, &GameMemory);						
 					}
 					
 					/* FILL THE SOUND BUFFER WITH OUR GENERATED SOUND
