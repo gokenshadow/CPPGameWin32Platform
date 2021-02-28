@@ -142,7 +142,7 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_state *G
 	// ---------------
 	// ---------------
 
-	int16 ToneVolume = 0;
+	int16 ToneVolume = 3000;
 
 	int WavePeriod = SoundBuffer->SamplesPerSecond/GameState->ToneHz;
 
@@ -222,7 +222,7 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_state *G
 			// If the current Pixel we're on is our chosen background color
 			// don't draw it, so that part of the image can be transparent
 			if(DIBPixel!=BackgroundColor){
-				*Pixel = DIBPixel;				
+				*Pixel = DIBPixel;		
 			}
 			*BMPPixel++;
 			*Pixel++;
@@ -231,8 +231,8 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_state *G
 		DataImageRow += ImagePitch;
 	}
 
-	//GameState->XOffset+=80;
-	//GameState->YOffset+=80;
+	GameState->XOffset+=1;
+	GameState->YOffset+=1;
 
 	if(Controller->IsConnected) {
 		if(Controller->IsAnalog) {
