@@ -8,6 +8,7 @@ struct game_offscreen_buffer {
     int Width;
     int Height;
     int Pitch;
+	int BytesPerPixel;
 };
 
 void b();
@@ -17,6 +18,7 @@ struct bmp_image_data {
 	uint32 Width;
 	uint32 Height;
 	uint32 BytesPerPixel;
+	uint32 Size;
 	uint8 *ImageData;
 };
 

@@ -45,6 +45,7 @@ struct win32_offscreen_buffer {
     int Width;
     int Height;
     int Pitch;
+	int BytesPerPixel;
 };
 
 static bool GlobalRunning;
@@ -164,72 +165,97 @@ typedef HRESULT WINAPI direct_sound_create(LPCGUID pcGuideDevice, LPDIRECTSOUND 
 //This function will be for opening BMP files
 GET_BMP_IMAGE_DATA(GetBmpImageData) {
 	bmp_image_data Result = {};
-	FILE *filePointer = fopen(Filename, "rb");
-	// get file size
-	uint32 FileSize;
-	fseek(filePointer, 2, SEEK_SET);
-	fread(&FileSize, sizeof(uint32), 1, filePointer);
-	std::cout << "FileSize:" << FileSize << "\n";
 	
-	// get the data offset (in BMP It is at 0x000A)
-	uint32 DataOffset;
-	fseek(filePointer, 0x000A, SEEK_SET);
-	fread(&DataOffset, sizeof(uint32), 1, filePointer);
-	fseek(filePointer, DataOffset, SEEK_SET);
-	std::cout << "DataOffset:" << DataOffset << "\n";
+	if(FILE *filePointer = fopen(Filename, "rb")) {		
+		// get file size
+		uint32 FileSize;
+		fseek(filePointer, 2, SEEK_SET);
+		fread(&FileSize, sizeof(uint32), 1, filePointer);
+		std::cout << "FileSize:" << FileSize << "\n";
+		
+		// get the data offset (in BMP It is at 0x000A)
+		uint32 DataOffset;
+		fseek(filePointer, 0x000A, SEEK_SET);
+		fread(&DataOffset, sizeof(uint32), 1, filePointer);
+		fseek(filePointer, DataOffset, SEEK_SET);
+		std::cout << "DataOffset:" << DataOffset << "\n";
 
-	// get width (0x0012 in BMP) /height (0x0016 in BMP)
-	uint32 Width;
-	fseek(filePointer, 0x0012, SEEK_SET);
-	fread(&Width, 4, 1, filePointer);
-	uint32 Height;
-	fseek(filePointer, 0x0016, SEEK_SET);
-	fread(&Height, 4, 1, filePointer);
-	std::cout << "" << "Width:" << Width << " Height:" << Height << "\n";
+		// get width (0x0012 in BMP) /height (0x0016 in BMP)
+		uint32 Width;
+		fseek(filePointer, 0x0012, SEEK_SET);
+		fread(&Width, 4, 1, filePointer);
+		uint32 Height;
+		fseek(filePointer, 0x0016, SEEK_SET);
+		fread(&Height, 4, 1, filePointer);
+		std::cout << "" << "Width:" << Width << "\nHeight:" << Height << "\n";
 
-	// get the bytesperpixel (0x001C in BMP)
-	uint32 BytesPerPixel;
-	int16 BitsPerPixel;
-	fseek(filePointer, 0x001C, SEEK_SET);
-	fread(&BitsPerPixel, 2, 1, filePointer);
-	BytesPerPixel = ((int32)BitsPerPixel) / 8;
-	std::cout << "BytesPerPixel:" << BytesPerPixel << "\n";
+		// get the bytesperpixel (0x001C in BMP)
+		uint32 BytesPerPixel;
+		int16 BitsPerPixel;
+		fseek(filePointer, 0x001C, SEEK_SET);
+		fread(&BitsPerPixel, 2, 1, filePointer);
+		BytesPerPixel = ((int32)BitsPerPixel) / 8;
+		std::cout << "BytesPerPixel:" << BytesPerPixel << "\n";
+		
+		// Get the Width in bytes
+		uint32 WidthBytes = Width*BytesPerPixel;
+		std::cout << "WidthBytes:" << WidthBytes << "\n";
+		
+		// get the padded width
+		uint32 PaddedWidth = Width + Width%4;
+		std::cout << "PaddedWidth:" << PaddedWidth << "\n";
+		uint32 PaddedWidthBytes = ceil((float)(WidthBytes/4.0f))*4;
+		std::cout << "PaddedWidthBytes:" << PaddedWidthBytes << "\n";
+		
+		// get the actual size of the data
+		uint32 ActualDataSize = PaddedWidthBytes*Height;
+		std::cout << "ActualDataSize:" << ActualDataSize << "\n";
 
-	// get the padded width
-	uint32 PaddedWidth = (uint32)(ceil((float)Width / 4.0)) * 4;
-	std::cout << "PaddedWidth:" << PaddedWidth << "\n";
-
-	// get the actual size of the data
-	uint32 ActualDataSize = PaddedWidth*Height*BytesPerPixel;
-
-	// get the size of the Data we want
-	uint32 DataSize = Width*Height*BytesPerPixel;
-	std::cout << "DataSize:" << DataSize << "\n";
-	
-	// get the size of the final Data
-	uint32 FinalDataSize = Width*Height*4;
-	
-	// get a pointer to point to some allocated
-	// space for our image data
-	uint8 *ImageData;
-	
-	// allocate space for the data we want
-	ImageData = (uint8*)malloc(DataSize);
-	
-	// Write the image data to the allocated 
-	
-	// Grab the last row of the memory we allocated
-	uint8 *CurrentRow = ImageData+((Height-1)*Width*BytesPerPixel);
-	for (int i = 0; i < Height; i++)
-	{
-		fseek(filePointer, DataOffset+(i*PaddedWidth*BytesPerPixel), SEEK_SET);
-		fread(CurrentRow, 1, Width*BytesPerPixel, filePointer);
-		CurrentRow -= Width*BytesPerPixel;
+		// get the size of the Data we want
+		uint32 DataSize = Width*Height*BytesPerPixel;
+		std::cout << "DataSize:" << DataSize << "\n";
+		
+		// get the size of the final Data
+		uint32 FinalDataSize = Width*Height*4;
+		
+		// get a pointer to point to some allocated
+		// space for our image data
+		uint8 *ImageData;
+		
+		// allocate space for the data we want
+		ImageData = (uint8*)malloc(DataSize);
+		memset(ImageData, 0xFFFFFFFF, DataSize);
+		
+		// Write the image data to the allocated 
+		
+		// Grab the last row of the memory we allocated
+		uint8 *CurrentRow = ImageData+((Height-1)*WidthBytes);
+		for (int i = 0; i < Height; i++)
+		{
+			fseek(filePointer, DataOffset+(i*PaddedWidthBytes), SEEK_SET);
+			fread(CurrentRow, 1, WidthBytes, filePointer);
+			CurrentRow -= WidthBytes;
+		}
+		
+		uint8 *TestThePixels = ImageData;
+		uint32 TestPixel;
+		for(int i=0;i<DataSize;i++) {
+			TestPixel = *TestThePixels<<8;
+			TestPixel = TestPixel>>8;
+			//std::cout << std::hex << TestPixel << " ";
+			*TestThePixels++;
+		}
+		std::cout << "\n";
+		
+		fclose(filePointer);
+		Result.Width = Width;
+		Result.Height = Height;
+		Result.BytesPerPixel = BytesPerPixel;
+		Result.Size = DataSize;
+		Result.ImageData = ImageData;
+	} else {
+		std::cout << "ERROR: Unable to open BMP image file '" << Filename << "'.\n";
 	}
-	Result.Width = Width;
-	Result.Height = Height;
-	Result.BytesPerPixel = BytesPerPixel;
-	Result.ImageData = ImageData;
 	return Result;
 }
 
@@ -435,6 +461,7 @@ int CALLBACK WinMain(
     PointerToBackBuffer->Width = ScreenWidth;
     PointerToBackBuffer->Height = ScreenHeight;  
     PointerToBackBuffer->Pitch = ScreenWidth*BytesPerPixel;
+	PointerToBackBuffer->BytesPerPixel = BytesPerPixel;
 
 	/* Set the DIB properties
 	// A DIB is like a BMP, datawise. The BITMAPINFO is a struct that contains stuff about that DIB.
@@ -903,6 +930,7 @@ int CALLBACK WinMain(
 			// ------------------------------
             GlobalRunning = true;
 			while(GlobalRunning){
+				//std::cout << "GAMEUPDATEHZ:" << GameUpdateHz << "\n\n";
 				// RELOAD GAMECODE IF IT CHANGES
 				// ---------------
 				// ---------------
@@ -1284,6 +1312,7 @@ int CALLBACK WinMain(
 					GameBuffer.Width = PointerToBackBuffer->Width;
 					GameBuffer.Height = PointerToBackBuffer->Height;
 					GameBuffer.Pitch = PointerToBackBuffer->Pitch;
+					GameBuffer.BytesPerPixel = PointerToBackBuffer->BytesPerPixel;
 					// Get the Sound Data from the game
 					GameSoundBuffer.Samples = Samples;
 					GameSoundBuffer.SampleCount = BytesToWrite / BytesPerSample;

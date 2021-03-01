@@ -35,6 +35,7 @@ typedef double real64;
 #define NO_COMPRESION 0
 #define MAX_NUMBER_OF_COLORS 0
 #define ALL_COLORS_REQUIRED 0
+#define BACKGROUND_COLOR 0xFFFFFFFF
 
 void blah(){
 	std::cout << "blah\n";
@@ -56,17 +57,16 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_state *G
 									game_controller_input *Controller, game_sound_output_buffer *SoundBuffer,
 									game_memory *Memory) {
 	static byte *pixels;
-	static uint32 ImageX =100;
-	static uint32 ImageY =0;
-	
+	static int ImageX = 0;
+	static int ImageY = 0;
 	static bmp_image_data TestImageData;
-	/*static int32 TestWidth;
-	static int32 TestHeight;
-	static int32 TestBytesPerPixel;
-	static uint8 *TestImageData;*/
+
+	if(!TestImageData.Width) {
+		TestImageData = Memory->GetBmpImageData("image.bmp");
+	}
 
 	if(GameState->IsInitialized == false) {
-		
+		std::cout << "ImageX:" << ImageX << "\n";
 		GameState->ToneHz = 256;
 		GameState->tSine = 0.0f;
 		GameState->XSpeed = 2;
@@ -74,22 +74,10 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_state *G
 		GameState->IsInitialized = true;
 		GameState->ToneLevel = 256;
 		
-		bmp_image_data Tests[100]; 
-		
-		// Grab a bunch of images and shove them into memory
-		
-		for(int i=0; i<100; i++){
-			Tests[i] = Memory->GetBmpImageData("image2.bmp");
-		}
-		b();
-		// Remove all those images from memory
-		for(int i=0; i<100; i++){
-			Memory->ClearBmpImageData(Tests[i]);
-		}
+		bmp_image_data Tests[100]; 	
 		
 		
-		TestImageData = Memory->GetBmpImageData("image2.bmp");
-		
+		//Memory->ClearBmpImageData(TestImageData);		
 
 	}
 
@@ -146,57 +134,18 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_state *G
 		Row += Buffer->Pitch;
 	}
 
-	// DRAW A BMP IMAGE ON THE SCREEN
+	// DO STUFF BASED ON USER INPUT
 	// ---------------
 	// ---------------
-	if(ImageX<Buffer->Width*TestImageData.BytesPerPixel) {
-		ImageX = 0;
-	}
-	if(ImageX>Buffer->Width*TestImageData.BytesPerPixel) {
-		ImageX = Buffer->Width*TestImageData.BytesPerPixel;
-	}
-	if(ImageY<Buffer->Width*TestImageData.BytesPerPixel) {
-		ImageY = 0;
-	}
-	if(ImageY>Buffer->Width*TestImageData.BytesPerPixel) {
-		ImageY = Buffer->Width*TestImageData.BytesPerPixel;
-	}
-	
-	#if 0
-	#endif
-	// DISPLAY AN IMAGE
-	// ---------------
-	// ---------------
-	uint32 BackgroundColor = 0xFFFFFFFF;
-	uint8 *BmpRow = (uint8*)Buffer->Memory;
-	uint32 ImagePitch = TestImageData.Width*TestImageData.BytesPerPixel;
-	uint32 DIBPixel;
-	uint8 *DataImageRow = (uint8*)TestImageData.ImageData;
-	for(int Y = 0; Y<TestImageData.Height; ++Y){
-		bmp_pixel *BMPPixel = (bmp_pixel*)DataImageRow;
-		uint32 *Pixel = (uint32 *)BmpRow;
-		for(int X = 0; X < TestImageData.Width; ++X) {
-			//Convert the BMP Pixel (24bit) into a DIB Pixel (32 bit)
-			DIBPixel = (0xFF << 24) |(BMPPixel->red << 16) | (BMPPixel->green<<8) | (BMPPixel->blue);
-			// If the current Pixel we're on is our chosen background color
-			// don't draw it, so that part of the image can be transparent
-			if(DIBPixel!=BackgroundColor){
-				*Pixel = DIBPixel;		
-			}
-			*BMPPixel++;
-			*Pixel++;
-		}
-		BmpRow += Buffer->Pitch;
-		DataImageRow += ImagePitch;
-	}
-
-	GameState->XOffset+=1;
-	GameState->YOffset+=1;
+	//GameState->XOffset+=1;
+	//GameState->YOffset+=1;
 
 	if(Controller->IsConnected) {
 		if(Controller->IsAnalog) {
-			GameState->XOffset += (int)(16.0f*(Controller->StickAverageX));
-			GameState->YOffset -= (int)(16.0f*(Controller->StickAverageY));
+			//GameState->XOffset += (int)(16.0f*(Controller->StickAverageX));
+			//GameState->YOffset -= (int)(16.0f*(Controller->StickAverageY));
+			ImageX += (int)(16.0f*(Controller->StickAverageX));
+			ImageY -= (int)(16.0f*(Controller->StickAverageY));
 			GameState->ToneHz = GameState->ToneLevel + (int)(128.0f*(Controller->StickAverageY));
 		}
 		if(Controller->MoveUp) {
@@ -213,7 +162,61 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_state *G
 		}
 	}
 
-
+	// DRAW A BMP IMAGE ON THE SCREEN
+	// ---------------
+	// ---------------
+	int ImageEndX = (ImageX + TestImageData.Width);
+	int ImageEndY = (ImageY + TestImageData.Height);
+	/*
+	if(ImageX > (int)(Buffer->Width - TestImageData.Width)) {
+		ImageX = Buffer->Width - TestImageData.Width;
+	}
+	if(ImageX < 0 ) {
+		ImageX = 0;
+	}
+	if(ImageY < 0) {
+		ImageY = 0;
+	}
+	if(ImageY > Buffer->Height - TestImageData.Height) {
+		ImageY = Buffer->Height - TestImageData.Height;
+	}
+	*/
+	
+	//std::cout << "ImageX:" << Buffer->Width - TestImageData.Width << "\n";
+	//std::cout << "ImageX:" << ImageX << "\n";
+	//std::cout << "ImageY:" << ImageY << "\n";
+			
+	#if 0
+	#endif
+	uint8 *BmpRow = (uint8*)Buffer->Memory;
+	uint32 ImagePitch = TestImageData.Width*TestImageData.BytesPerPixel;
+	uint32 DIBPixel;
+	uint8 *DataImageRow = (uint8*)TestImageData.ImageData;
+	BmpRow += ImageX*Buffer->BytesPerPixel;
+	BmpRow += ImageY*Buffer->Pitch;
+	b();
+	for(int Y = 0; Y<TestImageData.Height; ++Y){
+		bmp_pixel *BMPPixel = (bmp_pixel*)DataImageRow;
+		uint32 *Pixel = (uint32 *)BmpRow;
+		for(int X = 0; X < TestImageData.Width; ++X) {
+			//Convert the BMP Pixel (24bit) into a DIB Pixel (32 bit)
+			DIBPixel = (0xFF << 24) |(BMPPixel->red << 16) | (BMPPixel->green<<8) | (BMPPixel->blue);
+			// If the current Pixel we're on is our chosen background color
+			// don't draw it, so that part of the image can be transparent
+			if(DIBPixel!=BACKGROUND_COLOR 
+				&& X+ImageX < (int)Buffer->Width
+				&& X+ImageX > 0
+				&& Y+ImageY < (int)Buffer->Height
+				&& Y+ImageY > 0){
+				*Pixel = DIBPixel;		
+			}
+			*BMPPixel++;
+			*Pixel++;
+		}
+		BmpRow += Buffer->Pitch;
+		DataImageRow += ImagePitch;
+	}
+	b();
 
 	// Move the weird gradient from Right to left
 	//GameState->XOffset+=GameState->XSpeed;
