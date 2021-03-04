@@ -60,6 +60,8 @@ static void *GlobalDibMemory;
 
 static int64 GlobalPerfCountFrequency;
 
+static bool GlobalLockMouse = false;
+
 /* MAKE XInputGetState() SAFE TO USE 
 // We want to be able to call the XInputGetState() function without getting any
 // errors, even if we aren't able to import the library that contains the 
@@ -115,13 +117,20 @@ static x_input_get_state *XInputGetState_ = XInputGetStateStub;
 // DWORD WINAPI WhateverNameWeWantOurFunctionToBe(DWORD dwUserIndex, XINPUT_VIBRATION *pVibration)*/
 #define X_INPUT_SET_STATE(name) DWORD WINAPI name(DWORD dwUserIndex, XINPUT_VIBRATION *pVibration)
 typedef X_INPUT_SET_STATE(x_input_set_state);
+// Then we once again create a fake function to point to in case getting 
+// the library doesn't work
 X_INPUT_SET_STATE(XInputSetStateStub){
 	return(ERROR_DEVICE_NOT_CONNECTED);
 }
+// Create a function pointer and point to the stub
 static x_input_set_state *XInputSetState_ = XInputSetStateStub;
+// And trick C++
 #define XInputSetState XInputSetState_
 
 
+// I had to do this same thing for the BeginTimePeriod function because
+// whatever version of MinGW I'm using gives me an unfixable error when
+// I try to use it
 #define TIME_BEGIN_PERIOD(name) MMRESULT name(UINT uPeriod)
 typedef TIME_BEGIN_PERIOD(time_begin_period);
 TIME_BEGIN_PERIOD(TimeBeginPeriodStub){
@@ -167,7 +176,7 @@ GET_BMP_IMAGE_DATA(GetBmpImageData) {
 	bmp_image_data Result = {};
 	
 	if(FILE *filePointer = fopen(Filename, "rb")) {		
-		// get file size
+		// get file size (in BMP it is at 0x0002 or two)
 		uint32 FileSize;
 		fseek(filePointer, 2, SEEK_SET);
 		fread(&FileSize, sizeof(uint32), 1, filePointer);
@@ -180,7 +189,7 @@ GET_BMP_IMAGE_DATA(GetBmpImageData) {
 		fseek(filePointer, DataOffset, SEEK_SET);
 		std::cout << "DataOffset:" << DataOffset << "\n";
 
-		// get width (0x0012 in BMP) /height (0x0016 in BMP)
+		// get width (0x0012 in BMP)  and height (0x0016 in BMP)
 		uint32 Width;
 		fseek(filePointer, 0x0012, SEEK_SET);
 		fread(&Width, 4, 1, filePointer);
@@ -197,6 +206,12 @@ GET_BMP_IMAGE_DATA(GetBmpImageData) {
 		BytesPerPixel = ((int32)BitsPerPixel) / 8;
 		std::cout << "BytesPerPixel:" << BytesPerPixel << "\n";
 		
+		// If the BMP is some other format besides 24bit or 32bit, CHUCK IT!
+		if(BytesPerPixel<3||BytesPerPixel>4){
+			std::cout << "ERROR: This program only accepts 24bit or 32bit BMP files'" << Filename << "'.\n";
+			return Result;
+		}
+		
 		// Get the Width in bytes
 		uint32 WidthBytes = Width*BytesPerPixel;
 		std::cout << "WidthBytes:" << WidthBytes << "\n";
@@ -204,6 +219,7 @@ GET_BMP_IMAGE_DATA(GetBmpImageData) {
 		// get the padded width
 		uint32 PaddedWidth = Width + Width%4;
 		std::cout << "PaddedWidth:" << PaddedWidth << "\n";
+		// and the padded width in bytes
 		uint32 PaddedWidthBytes = ceil((float)(WidthBytes/4.0f))*4;
 		std::cout << "PaddedWidthBytes:" << PaddedWidthBytes << "\n";
 		
@@ -218,7 +234,7 @@ GET_BMP_IMAGE_DATA(GetBmpImageData) {
 		// get the size of the final Data
 		uint32 FinalDataSize = Width*Height*4;
 		
-		// get a pointer to point to some allocated
+		// create a pointer to point to some allocated
 		// space for our image data
 		uint8 *ImageData;
 		
@@ -226,8 +242,7 @@ GET_BMP_IMAGE_DATA(GetBmpImageData) {
 		ImageData = (uint8*)malloc(DataSize);
 		memset(ImageData, 0xFFFFFFFF, DataSize);
 		
-		// Write the image data to the allocated 
-		
+		// Write the image data to the allocated space
 		// Grab the last row of the memory we allocated
 		uint8 *CurrentRow = ImageData+((Height-1)*WidthBytes);
 		for (int i = 0; i < Height; i++)
@@ -245,7 +260,41 @@ GET_BMP_IMAGE_DATA(GetBmpImageData) {
 			//std::cout << std::hex << TestPixel << " ";
 			*TestThePixels++;
 		}
-		std::cout << "\n";
+		//std::cout << "\n";
+		
+		//If it's a 24bit BMP, convert it to a 32Bit BMP
+		if(BytesPerPixel==3) {
+			// Divide the size by the amount of bytes in a 24bit pixel (3),
+			// then multiply that divided number by the number of
+			// bytes in a 32bit pixel (4)
+			uint32 NewDataSize = (DataSize/3)*4;
+			
+			// Allocate some space to shove the converted data into 
+			uint8 *ImageData32Bit = (uint8*)malloc(NewDataSize);
+			
+			uint32 NumberOfPixels = Width*Height;
+			
+			// Convert the data into 32bit, then shove the data into
+			// our memory one pixel at a time
+			bmp_pixel *OldDataPointer = (bmp_pixel*)ImageData;
+			uint32 *NewDataPointer = (uint32*)ImageData32Bit;
+			uint32 DIBPixel;
+			for (int i = 0; i < NumberOfPixels; i++) {
+				DIBPixel = (0xFF << 24) |(OldDataPointer->red << 16) | (OldDataPointer->green<<8) | (OldDataPointer->blue); 
+				*NewDataPointer = DIBPixel;
+				*NewDataPointer++;
+				*OldDataPointer++;
+			}
+			// Change the BytesPerPixel to 4
+			BytesPerPixel=4;
+			// Remove the allocated memory we created for the original bit image
+			free(ImageData);
+			
+			// Point it's pointer to the new memory with the 32 bit data
+			ImageData = ImageData32Bit;
+			DataSize=NewDataSize;
+			
+		}
 		
 		fclose(filePointer);
 		Result.Width = Width;
@@ -306,6 +355,15 @@ LRESULT CALLBACK Win32MainWindowCallback(
             GlobalRunning = false;
 			PostQuitMessage(0);
         } break;
+		case WM_ACTIVATE:
+			if(WParam == WA_INACTIVE) {
+				GlobalLockMouse = false;
+			} else {
+				GlobalLockMouse = true;
+			}
+        {
+			
+        } break;
         case WM_CLOSE:
         {
             GlobalRunning = false;
@@ -344,6 +402,7 @@ LRESULT CALLBACK Win32MainWindowCallback(
 			// StretchDIBits takes the color data (what colors the pixels are) of an image
 			// And puts it into a destination. In this case, that destination will be the back
 			// buffer
+			
 			StretchDIBits(DeviceContext,
 							0, 0, PointerToBackBuffer->Width, PointerToBackBuffer->Height,
 							0, 0, PointerToBackBuffer->Width, PointerToBackBuffer->Height,
@@ -376,8 +435,8 @@ int CALLBACK WinMain(
     int ShowCode // determines how app window will be displayed
 ) {
 	// Hide the console (Windows XP shows the console even though this is a WinMain function when it's compiled with MinGW)
-	::ShowWindow(::GetConsoleWindow(), SW_HIDE);
-	::ShowWindow(::GetConsoleWindow(), SW_SHOW);
+	//::ShowWindow(::GetConsoleWindow(), SW_HIDE);
+	//::ShowWindow(::GetConsoleWindow(), SW_SHOW);
 	
 	
 	// Filenames for hot reloading
@@ -455,8 +514,8 @@ int CALLBACK WinMain(
 	// Set the screen properties (this could probably be set elsewhere, but here it is for now)
 	int ScreenWidth = 960;
 	int ScreenHeight = 540;
-	int WindowsWindowWidth = 1280;
-	int WindowsWindowHeight = 720;
+	int WindowsWindowWidth = 960;
+	int WindowsWindowHeight = 540;
 	int BytesPerPixel = 4;
     PointerToBackBuffer->Width = ScreenWidth;
     PointerToBackBuffer->Height = ScreenHeight;  
@@ -531,6 +590,7 @@ int CALLBACK WinMain(
 				MonitorRefreshHz = Win32RefreshRate;
 			}
 			static double GameUpdateHz (MonitorRefreshHz / 2.0f);
+			GameUpdateHz = 60;
 			double TargetSecondsPerFrame = 1.0f / (double)GameUpdateHz;		
 
 			// INITIALZE SOUND
@@ -922,6 +982,25 @@ int CALLBACK WinMain(
 			
 			int GameCodeLoadBuffer = 0;	
 			
+			bool KeyboardInUse = false;
+			
+			// Put mouse in center of screen;
+			RECT ClientRect;
+			
+			GetClientRect(Window, &ClientRect);
+
+			uint32 MouseWindowWidth = ClientRect.right - ClientRect.left;
+			uint32 MouseWindowHeight = ClientRect.bottom - ClientRect.top;
+			
+			SetCursorPos(ClientRect.right - MouseWindowWidth/2, ClientRect.bottom - MouseWindowHeight/2 );
+			
+			POINT OldCursorPosition;
+			GetCursorPos(&OldCursorPosition);
+			POINT NewCursorPosition = OldCursorPosition;
+			POINT StartCursorPosition = OldCursorPosition;
+			int MouseDeltaX = 0;
+			int MouseDeltaY = 0;
+			
 			// START THE PROGRAM LOOP
 			// ------------------------------
 			// ------------------------------
@@ -929,7 +1008,7 @@ int CALLBACK WinMain(
 			// ------------------------------
 			// ------------------------------
             GlobalRunning = true;
-			while(GlobalRunning){
+			while(GlobalRunning){ 
 				//std::cout << "GAMEUPDATEHZ:" << GameUpdateHz << "\n\n";
 				// RELOAD GAMECODE IF IT CHANGES
 				// ---------------
@@ -974,6 +1053,7 @@ int CALLBACK WinMain(
 				}
 				LastDLLWriteTime=NewDLLWriteTime;
 				
+				Controller.IsConnected = true;
 					
 				// HANDLE WINDOWS MESSAGES
 				// ---------------
@@ -1009,25 +1089,41 @@ int CALLBACK WinMain(
 								} else if (VKCode == 'Q') {
 								} else if (VKCode == 'E') {
 								} else if (VKCode == VK_UP) {
-									if(WasDown)
-										YSpeed=0;
-									if(IsDown)
-										YSpeed=-Speed;
+									if(WasDown) {
+										Controller.MoveUp=false;
+										KeyboardInUse=false;
+									}
+									if(IsDown) {
+										Controller.MoveUp=true;
+										KeyboardInUse=true;
+									}
 								} else if (VKCode == VK_DOWN) {
-									if(WasDown)
-										YSpeed=0;
-									if(IsDown)
-										YSpeed=Speed;
+									if(WasDown) {
+										Controller.MoveDown=false;
+										KeyboardInUse=false;
+									}
+									if(IsDown) {
+										Controller.MoveDown=true;
+										KeyboardInUse=true;
+									}
 								} else if (VKCode == VK_RIGHT) {
-									if(WasDown)
-										XSpeed=0;
-									if(IsDown)
-										XSpeed=Speed;
+									if(WasDown) {
+										Controller.MoveRight=false;
+										KeyboardInUse=false;
+									}
+									if(IsDown) {
+										Controller.MoveRight=true;
+										KeyboardInUse=true;
+									}
 								} else if (VKCode == VK_LEFT) {
-									if(WasDown)
-										XSpeed=0;
-									if(IsDown)
-										XSpeed=-Speed;
+									if(WasDown) {
+										Controller.MoveLeft=false;
+										KeyboardInUse=false;
+									}
+									if(IsDown) {
+										Controller.MoveLeft=true;
+										KeyboardInUse=true;
+									}
 								} else if (VKCode == VK_ESCAPE) {
 									GlobalRunning = false;
 								} else if (VKCode == VK_SPACE) {
@@ -1051,32 +1147,55 @@ int CALLBACK WinMain(
 					}
                 }
 				
+				// HANDLE MOUSE INPUT
+				// ---------------
+				// ---------------
+				if(GlobalLockMouse==true) {
+					ShowCursor(false);
+					GetCursorPos(&NewCursorPosition);
+					MouseDeltaX = (OldCursorPosition.x-NewCursorPosition.x)*-1;
+					MouseDeltaY = (OldCursorPosition.y-NewCursorPosition.y)*-1;
+					Controller.MouseDeltaX = MouseDeltaX;
+					Controller.MouseDeltaY = MouseDeltaY;
+					NewCursorPosition.x = StartCursorPosition.x;
+					NewCursorPosition.y = StartCursorPosition.y;
+					OldCursorPosition = NewCursorPosition;
+					SetCursorPos(StartCursorPosition.x,StartCursorPosition.y);
+					//std::cout << "MouseX:" << MouseDeltaX << "\nMouseY:" << MouseDeltaY << "\n";
+				} else {
+					ShowCursor(true);
+				}
+				
 				// HANDLE JOYPAD INPUT
 				// ---------------
 				// ---------------	
 				XINPUT_STATE ControllerState;
 				if(XInputGetState(0, &ControllerState) == ERROR_SUCCESS){ 
-					Controller.IsConnected = true;
 					XINPUT_GAMEPAD *Pad = &ControllerState.Gamepad;
 					
+					
 					// Map the buttons from Xinput to our controller	
-					// DPad Buttons
-					Controller.MoveUp = (bool)(Pad->wButtons&XINPUT_GAMEPAD_DPAD_UP);
-					Controller.MoveDown = (bool)(Pad->wButtons&XINPUT_GAMEPAD_DPAD_DOWN);
-					Controller.MoveLeft = (bool)(Pad->wButtons&XINPUT_GAMEPAD_DPAD_LEFT);
-					Controller.MoveRight = (bool)(Pad->wButtons&XINPUT_GAMEPAD_DPAD_RIGHT);
 					
-					// Action buttons
-					Controller.ActionDown = (bool)(Pad->wButtons&XINPUT_GAMEPAD_A);
-					Controller.ActionRight = (bool)(Pad->wButtons&XINPUT_GAMEPAD_B);
-					Controller.ActionLeft = (bool)(Pad->wButtons&XINPUT_GAMEPAD_X);
-					Controller.ActionUp = (bool)(Pad->wButtons&XINPUT_GAMEPAD_Y);
-					Controller.LeftShoulder = (bool)(Pad->wButtons&XINPUT_GAMEPAD_LEFT_SHOULDER);
-					Controller.RightShoulder = (bool)(Pad->wButtons&XINPUT_GAMEPAD_RIGHT_SHOULDER);
+					if(KeyboardInUse==false) {
+						// DPad Buttons
+						Controller.MoveUp = (bool)(Pad->wButtons&XINPUT_GAMEPAD_DPAD_UP);
+						Controller.MoveDown = (bool)(Pad->wButtons&XINPUT_GAMEPAD_DPAD_DOWN);
+						Controller.MoveLeft = (bool)(Pad->wButtons&XINPUT_GAMEPAD_DPAD_LEFT);
+						Controller.MoveRight = (bool)(Pad->wButtons&XINPUT_GAMEPAD_DPAD_RIGHT);
+						
+						// Action buttons
+						Controller.ActionDown = (bool)(Pad->wButtons&XINPUT_GAMEPAD_A);
+						Controller.ActionRight = (bool)(Pad->wButtons&XINPUT_GAMEPAD_B);
+						Controller.ActionLeft = (bool)(Pad->wButtons&XINPUT_GAMEPAD_X);
+						Controller.ActionUp = (bool)(Pad->wButtons&XINPUT_GAMEPAD_Y);
+						Controller.LeftShoulder = (bool)(Pad->wButtons&XINPUT_GAMEPAD_LEFT_SHOULDER);
+						Controller.RightShoulder = (bool)(Pad->wButtons&XINPUT_GAMEPAD_RIGHT_SHOULDER);
+						
+						// Menu buttons
+						Controller.Start = (bool)(Pad->wButtons&XINPUT_GAMEPAD_START);
+						Controller.Back = (bool)(Pad->wButtons&XINPUT_GAMEPAD_BACK);						
+					}
 					
-					// Menu buttons
-					Controller.Start = (bool)(Pad->wButtons&XINPUT_GAMEPAD_START);
-					Controller.Back = (bool)(Pad->wButtons&XINPUT_GAMEPAD_BACK);
 					
 					if(Pad->wButtons&XINPUT_GAMEPAD_BACK) {
 						GlobalRunning = false;
@@ -1104,7 +1223,7 @@ int CALLBACK WinMain(
 					YOffset -= (int)(8.0f*(StickAverageY));
 					ToneHz = 256 + (int)(128.0f*(StickAverageY));
 				} else {
-					Controller.IsConnected = false;
+					//Controller.IsConnected = false;
 				}
 				
 				// MAKE SOUND HAPPEN
@@ -1367,6 +1486,8 @@ int CALLBACK WinMain(
 				// LIMIT THE FPS (TODO: explain)
 				// ---------------
 				// ---------------
+				#if 0
+				#endif
 				if(SecondsElapsedForFrame < TargetSecondsPerFrame) {
 					if(SleepIsGranular) {
 						DWORD SleepMS = (DWORD)(800.0f * (TargetSecondsPerFrame - SecondsElapsedForFrame));
@@ -1392,7 +1513,7 @@ int CALLBACK WinMain(
 				// FPS Tracking
 				real32 SecondsPerFrame = Win32GetSecondsElapsed(LastCounter,Win32GetWallClock());
 				double FramesPerSecond = 1.0d/ SecondsPerFrame;
-				//std::cout << "FPS: " << FramesPerSecond << "\n";
+				std::cout << "FPS: " << FramesPerSecond << "\n";
 				LARGE_INTEGER EndCounter = Win32GetWallClock();
 				LastCounter = EndCounter;
 				
@@ -1415,6 +1536,9 @@ int CALLBACK WinMain(
 				
 				// StretchDIBits takes the color data (what colors the individual pixels are) of an image
 				// And puts it into a destination
+				
+				#if 0
+				#endif
 				StretchDIBits(DeviceContext,
 								0, 0, PointerToBackBuffer->Width, PointerToBackBuffer->Height,
 								0, 0, PointerToBackBuffer->Width, PointerToBackBuffer->Height,
@@ -1431,7 +1555,7 @@ int CALLBACK WinMain(
 				
 
             }
-			::ShowWindow(::GetConsoleWindow(), SW_SHOW);
+			//::ShowWindow(::GetConsoleWindow(), SW_SHOW);
         } else {
             // TODO(Casey): Logging
         }

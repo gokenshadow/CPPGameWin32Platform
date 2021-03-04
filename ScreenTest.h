@@ -13,6 +13,11 @@ struct game_offscreen_buffer {
 
 void b();
 
+struct bmp_pixel {
+	uint8 blue;
+	uint8 green;
+	uint8 red;
+};
 
 struct bmp_image_data {
 	uint32 Width;
@@ -54,6 +59,8 @@ struct game_controller_input {
 	bool32 IsAnalog;
 	real32 StickAverageX;
 	real32 StickAverageY;
+	int MouseDeltaX;
+	int MouseDeltaY;
 	
 	union {
 		game_button_state Buttons[12];

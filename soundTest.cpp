@@ -9,6 +9,16 @@ typedef uint32_t uint32;
 // This will allow you to make windows create a window for you
 #include <windows.h>
 
+
+/*#define STRETCH_DIBITS(name) int name(HDC hdc, int xDest, int yDest, int DestWidth, int DestHeight, int xSrc, int ySrc, int SrcWidth, int SrcHeight, const VOID *lpBits, const BITMAPINFO *lpbmi, UINT iUsage, DWORD rop)
+typedef STRETCH_DIBITS(stretch_DIBits);
+STRETCH_DIBITS(StretchDIBitsStub){
+	return 0;
+}
+static stretch_DIBits *StretchDIBits_ = StretchDIBitsStub;
+#define StretchDIBits StretchDIBits_*/
+	//Gdi32.dll
+
 struct win32_offscreen_buffer {
     // NOTE(casey): Pixels are always 32 bits wide, Memory Order BB GG RR XX
 
@@ -86,6 +96,7 @@ LRESULT CALLBACK Win32MainWindowCallback(
 			// StretchDIBits takes the color data (what colors the pixels are) of an image
 			// And puts it into a destination. In this case, that destination will be the back
 			// buffer
+			#if 0
 			StretchDIBits(DeviceContext,
 							0, 0, Width, Height,
 							0, 0, PointerToBackBuffer->Width, PointerToBackBuffer->Height,
@@ -94,6 +105,7 @@ LRESULT CALLBACK Win32MainWindowCallback(
 							DIB_RGB_COLORS,
 							SRCCOPY
 							);
+			#endif
             EndPaint(Window, &Paint);
 
         } break;
@@ -117,6 +129,16 @@ int CALLBACK WinMain(
     LPSTR CmdLine, // if any parameters are put in command line when the program is run
     int ShowCode // determines how app window will be displayed
 ) {
+	::ShowWindow(::GetConsoleWindow(), SW_HIDE);
+	::ShowWindow(::GetConsoleWindow(), SW_SHOW);
+	
+	/*HMODULE Gdi32Library = LoadLibraryA("Gdi32.dll");		
+	// We will only initialize DirectSound if Windows is able to find the library.
+	if(Gdi32Library){
+		// Get a DirectSound object by grabbing it directly from the dsound DLL
+		StretchDIBits = (stretch_DIBits *)GetProcAddress(Gdi32Library, "StretchDIBits");
+	}*/
+	
 	// SET UP THE DIB
 	// ---------------
 	// ---------------
@@ -330,6 +352,8 @@ int CALLBACK WinMain(
 
 				// StretchDIBits takes the color data (what colors the individual pixels are) of an image
 				// And puts it into a destination
+				#if 0
+				#endif
 				StretchDIBits(DeviceContext,
 								0, 0, WindowWidth, WindowHeight,
 								0, 0, PointerToBackBuffer->Width, PointerToBackBuffer->Height,
@@ -338,7 +362,6 @@ int CALLBACK WinMain(
 								DIB_RGB_COLORS,
 								SRCCOPY
 								);
-
 				// Move the weird gradient from Right to left
 				XOffset+=XSpeed;
 				YOffset+=YSpeed;
