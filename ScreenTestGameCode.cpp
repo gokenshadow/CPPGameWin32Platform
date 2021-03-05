@@ -127,18 +127,32 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_state *G
 	static byte *pixels;
 	static int ImageX = 0;
 	static int ImageY = 0;
+	static bmp_image_data BigAnimeImage;
+	static bmp_image_data Image0;
 	static bmp_image_data Image1;
 	static bmp_image_data Image2;
 	static bmp_image_data Image3;
 	static bmp_image_data Image4;
 	static bmp_image_data Image5;
+	static bmp_image_data Image6;
+	static bmp_image_data Image7;
+	static bmp_image_data Image8;
+	static bmp_image_data Image9;
+	static bmp_image_data Image10;
 
-	if(!Image1.Width) {
-		Image1 = Memory->GetBmpImageData("171.bmp");
-		Image2 = Memory->GetBmpImageData("171.bmp");
-		/*Image3 = Memory->GetBmpImageData("171.bmp");
-		Image4 = Memory->GetBmpImageData("171.bmp");
-		Image5 = Memory->GetBmpImageData("171.bmp");*/
+	if(!Image0.Width) {
+		BigAnimeImage = Memory->GetBmpImageData("images\\Brand-New-Animal.bmp");
+		Image0 = Memory->GetBmpImageData("images\\00.bmp");
+		Image1 = Memory->GetBmpImageData("images\\01.bmp");
+		Image2 = Memory->GetBmpImageData("images\\02.bmp");
+		Image3 = Memory->GetBmpImageData("images\\03.bmp");
+		Image4 = Memory->GetBmpImageData("images\\04.bmp");
+		Image5 = Memory->GetBmpImageData("images\\05.bmp");
+		Image6 = Memory->GetBmpImageData("images\\06.bmp");
+		Image7 = Memory->GetBmpImageData("images\\07.bmp");
+		Image8 = Memory->GetBmpImageData("images\\08.bmp");
+		Image9 = Memory->GetBmpImageData("images\\09.bmp");
+		Image10 = Memory->GetBmpImageData("images\\10.bmp");
 	}
 
 	if(GameState->IsInitialized == false) {
@@ -274,21 +288,41 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_state *G
 	//std::cout << "ImageY:" << ImageY << "\n";
 	int YExtra = 0;
 	int XExtra = 0;
+	DrawImage(BigAnimeImage, ImageX+XExtra, ImageY+YExtra, Buffer);
+	YExtra += BigAnimeImage.Height/1.5;
+	XExtra += BigAnimeImage.Width;
+	DrawImage(Image0, ImageX+XExtra, ImageY+YExtra, Buffer);
+	YExtra += Image0.Height/1.5;
+	XExtra += Image0.Width;
 	DrawImage(Image1, ImageX+XExtra, ImageY+YExtra, Buffer);
-	YExtra += Image1.Height/1.3;
+	YExtra += Image1.Height/1.5;
 	XExtra += Image1.Width;
 	DrawImage(Image2, ImageX+XExtra, ImageY+YExtra, Buffer);
-	YExtra += Image2.Height/1.3;
+	YExtra += Image2.Height/1.5;
 	XExtra += Image2.Width;
-	/*
 	DrawImage(Image3, ImageX+XExtra, ImageY+YExtra, Buffer);
-	YExtra += Image3.Height/1.3;
+	YExtra += Image3.Height/1.5;
 	XExtra += Image3.Width;
 	DrawImage(Image4, ImageX+XExtra, ImageY+YExtra, Buffer);
-	YExtra += Image4.Height/1.3;
-	XExtra += Image4.Width;
-	DrawImage(Image5, ImageX+XExtra, ImageY+YExtra, Buffer);*/
-
+	YExtra += Image4.Height/1.5;
+	DrawImage(Image5, ImageX+XExtra, ImageY+YExtra, Buffer);
+	YExtra += Image5.Height/1.5;
+	XExtra += Image5.Width;
+	DrawImage(Image6, ImageX+XExtra, ImageY+YExtra, Buffer);
+	YExtra += Image6.Height/1.5;
+	XExtra += Image6.Width;
+	DrawImage(Image7, ImageX+XExtra, ImageY+YExtra, Buffer);
+	YExtra += Image7.Height/1.5;
+	XExtra += Image7.Width;
+	DrawImage(Image8, ImageX+XExtra, ImageY+YExtra, Buffer);
+	YExtra += Image8.Height/1.5;
+	XExtra += Image8.Width;
+	DrawImage(Image9, ImageX+XExtra, ImageY+YExtra, Buffer);
+	YExtra += Image9.Height/1.5;
+	XExtra += Image9.Width;
+	DrawImage(Image10, ImageX+XExtra, ImageY+YExtra, Buffer);
+	YExtra += Image10.Height/1.5;
+	XExtra += Image10.Width;
 	
 	b();
 

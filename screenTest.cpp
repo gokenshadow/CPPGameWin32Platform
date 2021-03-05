@@ -62,6 +62,66 @@ static int64 GlobalPerfCountFrequency;
 
 static bool GlobalLockMouse = false;
 
+static bool GlobalFullScreen = false;
+
+static WINDOWPLACEMENT GlobalWindowPosition = { sizeof(GlobalWindowPosition) };
+
+
+// FULL SCREEN SUPPORT
+// This uses code from Raymond Chen's blogpost here:
+// https://devblogs.microsoft.com/oldnewthing/20100412-00/?p=14353
+void ToggleFullScreen(HWND Window)
+{
+  DWORD dwStyle = GetWindowLong(Window, GWL_STYLE);
+  if (dwStyle & WS_OVERLAPPEDWINDOW) {
+    MONITORINFO MonitorInfo = { sizeof(MonitorInfo) };
+    if (GetWindowPlacement(Window, &GlobalWindowPosition) &&
+        GetMonitorInfo(MonitorFromWindow(Window, MONITOR_DEFAULTTOPRIMARY), &MonitorInfo)) {
+		GlobalFullScreen = true;
+		SetWindowLong(Window, GWL_STYLE, dwStyle & ~WS_OVERLAPPEDWINDOW);
+		SetWindowPos(Window, HWND_TOP,
+					 MonitorInfo.rcMonitor.left, MonitorInfo.rcMonitor.top,
+				  	 MonitorInfo.rcMonitor.right - MonitorInfo.rcMonitor.left,
+					 MonitorInfo.rcMonitor.bottom - MonitorInfo.rcMonitor.top,
+					 SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+		int BytesPerPixel = 4;
+		int ScreenWidth = MonitorInfo.rcMonitor.right - MonitorInfo.rcMonitor.left;
+		int ScreenHeight = MonitorInfo.rcMonitor.bottom - MonitorInfo.rcMonitor.top;
+		win32_offscreen_buffer * PointerToBackBuffer = &GlobalBackBuffer;
+		PointerToBackBuffer->Width = ScreenWidth;
+		PointerToBackBuffer->Height = ScreenHeight;  
+		PointerToBackBuffer->Pitch = ScreenWidth*BytesPerPixel;
+		PointerToBackBuffer->BytesPerPixel = BytesPerPixel;
+
+		/* Set the DIB properties
+		// A DIB is like a BMP, datawise. The BITMAPINFO is a struct that contains stuff about that DIB.
+		// Inside BITMAPINFO is the bmiHeader, which will be very much like the
+		// header of a BMP in that it gives info about the format of the data, such as...*/
+		PointerToBackBuffer->Info.bmiHeader.biSize = sizeof(PointerToBackBuffer->Info.bmiHeader); // the size of the header itself
+		PointerToBackBuffer->Info.bmiHeader.biWidth = PointerToBackBuffer->Width; //the width of the DIB
+		PointerToBackBuffer->Info.bmiHeader.biHeight = -PointerToBackBuffer->Height; //the height of the DIB (negative tells Windows to draw top-down, not bottom-up)
+		PointerToBackBuffer->Info.bmiHeader.biPlanes = 1; // The amount of planes in the DIB
+		PointerToBackBuffer->Info.bmiHeader.biBitCount = 32; // The amount of bits per color in the DIB
+		PointerToBackBuffer->Info.bmiHeader.biCompression = BI_RGB; // the kind of compression the DIB will use (BI_RGB = No compression)
+
+		// Here we are calculating the amount of memory we need in bytes to have in order to fill each pixel,
+		// This will change if the width or height or bytesperpixel are changed
+		int BitmapMemorySize = (PointerToBackBuffer->Width*PointerToBackBuffer->Height)*BytesPerPixel;
+
+		// Allocate the amount of memory we calculated
+		PointerToBackBuffer->Memory = VirtualAlloc(0, BitmapMemorySize, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+    }
+  } else {
+	GlobalFullScreen = false;
+    SetWindowLong(Window, GWL_STYLE, dwStyle | WS_OVERLAPPEDWINDOW);
+    SetWindowPlacement(Window, &GlobalWindowPosition);
+    SetWindowPos(Window, 0, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
+                 SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+  }
+}
+
+
 /* MAKE XInputGetState() SAFE TO USE 
 // We want to be able to call the XInputGetState() function without getting any
 // errors, even if we aren't able to import the library that contains the 
@@ -512,11 +572,16 @@ int CALLBACK WinMain(
     }
 
 	// Set the screen properties (this could probably be set elsewhere, but here it is for now)
+	// 960 x 540
+	// CW_USEDEFAULT
 	int ScreenWidth = 960;
 	int ScreenHeight = 540;
+	int WindowsWindowX = CW_USEDEFAULT;
+	int WindowsWindowY = CW_USEDEFAULT;
 	int WindowsWindowWidth = 960;
 	int WindowsWindowHeight = 540;
 	int BytesPerPixel = 4;
+	
     PointerToBackBuffer->Width = ScreenWidth;
     PointerToBackBuffer->Height = ScreenHeight;  
     PointerToBackBuffer->Pitch = ScreenWidth*BytesPerPixel;
@@ -567,8 +632,8 @@ int CALLBACK WinMain(
             WindowClass.lpszClassName,      //lpClassName
             "Screen Test",                //lpWindowName - name of window
             WS_OVERLAPPEDWINDOW|WS_VISIBLE, //dwStyle
-            CW_USEDEFAULT,                  //X
-            CW_USEDEFAULT,                  //Y
+            WindowsWindowX,                  //X
+            WindowsWindowY,                  //Y
             WindowsWindowWidth,                  //nWidth
             WindowsWindowHeight,                  //nHeight
             0,                              //hWndParent - 0 if only one window
@@ -692,7 +757,7 @@ int CALLBACK WinMain(
 			/* There is always some variability in the timing of the actual hardware we're writing to, so
 			// we're going to add a small amount of bytes that will account for that variabliity and
 			// prevent it from messing with our sound. We'll call these bytes the SafetyBytes.*/
-			DWORD SafetyBytes = (SamplesPerSecond*BytesPerSample / GameUpdateHz) / 1;
+			DWORD SafetyBytes = (SamplesPerSecond*BytesPerSample / GameUpdateHz) / 0.5;
 			
 			/* Alright, now we can import the library.
 			// Instead of importing the DirectSound Lib file and linking it, which would be annoying 
@@ -1125,15 +1190,21 @@ int CALLBACK WinMain(
 										KeyboardInUse=true;
 									}
 								} else if (VKCode == VK_ESCAPE) {
-									GlobalRunning = false;
+									if(IsDown) {
+										if(GlobalFullScreen==true) {
+											ToggleFullScreen(Window);
+										} else {											
+											GlobalRunning = false;										
+										}
+									}
+								} else if (VKCode == VK_F4) {
+									if(IsDown) {
+										ToggleFullScreen(Window);
+									}
 								} else if (VKCode == VK_SPACE) {
 								} else if (VKCode == 'L') {
 								}
 								bool AltKeyWasDown = ((Message.lParam & (1 << 29)) != 0);
-								if ((VKCode == VK_F4) && AltKeyWasDown){
-									GlobalRunning = false;
-									PostQuitMessage(0);
-								}
 							}
 
 						} break;
