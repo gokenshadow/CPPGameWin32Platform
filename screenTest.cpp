@@ -118,7 +118,12 @@ void ToggleFullScreen(HWND Window)
 		// Here we are calculating the amount of memory we need in bytes to have in order to fill each pixel,
 		// This will change if the width or height or bytesperpixel are changed
 		int BitmapMemorySize = (PointerToBackBuffer->Width*PointerToBackBuffer->Height)*BytesPerPixel;
-
+		
+		//If there is previous memory for the screen buffer, unallocate it
+		if(PointerToBackBuffer->Memory){
+			VirtualFree(PointerToBackBuffer->Memory, 0, MEM_RELEASE);
+		}
+		
 		// Allocate the amount of memory we calculated
 		PointerToBackBuffer->Memory = VirtualAlloc(0, BitmapMemorySize, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
     }
