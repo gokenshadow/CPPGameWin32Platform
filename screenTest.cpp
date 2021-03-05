@@ -27,11 +27,22 @@ typedef double real64;
 // This will allow you to make windows create a window for you
 #include <windows.h>
 
+#if VSTUDIO
+
+#include <xinput.h>
+#include <dsound.h>
+
+#else
+
+
 // This will allow you to use Microsoft's direct sound definitions
 #include "mingwdsound.h"
 
 // This will allow you to use Microsoft's Xinput definitions
 #include "mingwxinput.h"
+
+#endif
+
 //#include <dsound.h>
 
 #include "ScreenTest.h"
@@ -199,6 +210,15 @@ TIME_BEGIN_PERIOD(TimeBeginPeriodStub){
 static time_begin_period *timeBeginPeriod_ = TimeBeginPeriodStub;
 #define timeBeginPeriod timeBeginPeriod_
 
+// Temporarily replace the GetConsoleWindow() function with a fake function
+// This is for Windows 98 Support because the GetConsoleWindow function
+// doesn't exist on Win98
+HWND WINAPI GetConsoleWindowStub () {
+	
+}
+typedef HWND WINAPI get_console_window();
+static get_console_window *GetConsoleWindow_ = GetConsoleWindowStub;
+#define GetConsoleWindow GetConsoleWindow_
 
 //winmm.dll
 
@@ -494,10 +514,29 @@ int CALLBACK WinMain(
     LPSTR CmdLine, // if any parameters are put in command line when the program is run
     int ShowCode // determines how app window will be displayed
 ) {
-	// Hide the console (Windows XP shows the console even though this is a WinMain function when it's compiled with MinGW)
-	//::ShowWindow(::GetConsoleWindow(), SW_HIDE);
-	//::ShowWindow(::GetConsoleWindow(), SW_SHOW);
+	// HIDE COMMAND PROMPT (we'll only do this when we ship)
+	// ---------------
+	// ---------------
+	/*
+	// MinGW doesn't get rid of the CMD console even if the application is in a WINMAIN function,
+	// so we have to do some extra stuff to get rid of the console.
 	
+	// WINDOWS XP HIDE CONSOLE
+	// Only use the GetConsoleWindow function if it's available (i.e. if Windows XP or higher)
+	// otherwise the GetConsoleWindow() function will point to the GetConsoleWindowStub() 
+	// function we made that does nothing
+	get_console_window *GetConsoleWindow_Test = GetConsoleWindow;
+	bool CanGetConsoleWindow = GetConsoleWindow_Test;
+	if(CanGetConsoleWindow) {
+		GetConsoleWindow_ = GetConsoleWindow;
+	}
+	ShowWindow(GetConsoleWindow(), SW_SHOW);
+	
+	// WINDOWS 98 HIDE CONSOLE
+	::SetConsoleTitle( "ConsoleWindow" ); 
+	HWND ConsoleWindow = ::FindWindow( NULL, "ConsoleWindow" );
+	ShowWindow(ConsoleWindow, SW_HIDE);
+	*/
 	
 	// Filenames for hot reloading
 	char SourceGameCodeDLLFullPath[MAX_PATH] = "C:\\Users\\goken\\cppProjects\\HandmadeHero\\ScreenTest.exe";
@@ -1203,8 +1242,14 @@ int CALLBACK WinMain(
 									}
 								} else if (VKCode == VK_SPACE) {
 								} else if (VKCode == 'L') {
+								} else if (VKCode == VK_RETURN) {
+									bool AltKeyWasDown = ((Message.lParam & (1 << 29)) != 0);
+									if(WasDown) {
+										if(AltKeyWasDown) {
+											ToggleFullScreen(Window);
+										}
+									}
 								}
-								bool AltKeyWasDown = ((Message.lParam & (1 << 29)) != 0);
 							}
 
 						} break;
@@ -1583,7 +1628,7 @@ int CALLBACK WinMain(
 				
 				// FPS Tracking
 				real32 SecondsPerFrame = Win32GetSecondsElapsed(LastCounter,Win32GetWallClock());
-				double FramesPerSecond = 1.0d/ SecondsPerFrame;
+				double FramesPerSecond = 1.0f/ SecondsPerFrame;
 				std::cout << "FPS: " << FramesPerSecond << "\n";
 				LARGE_INTEGER EndCounter = Win32GetWallClock();
 				LastCounter = EndCounter;
@@ -1626,7 +1671,6 @@ int CALLBACK WinMain(
 				
 
             }
-			//::ShowWindow(::GetConsoleWindow(), SW_SHOW);
         } else {
             // TODO(Casey): Logging
         }
