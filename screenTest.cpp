@@ -239,6 +239,12 @@ void GameUpdateAndRenderStub (game_offscreen_buffer *Buffer,  game_state *GameSt
 							  game_sound_output_buffer *SoundBuffer, game_memory *Memory) {
 	std::cout << "DLL import for GameUpdateAndRender() doesn't work.\n";
 }
+
+typedef void game_draw_text(const char *Text, int X, int Y, game_offscreen_buffer *ScreenBuffer);
+void GameDrawTextStub (const char *Text, int X, int Y, game_offscreen_buffer *ScreenBuffer) {
+	std::cout << "DLL import for GameDrawText() doesn't work.\n";
+}
+
 typedef void game_update_sound(game_sound_output_buffer *SoundBuffer);
 void GameUpdateSoundStub (game_sound_output_buffer *SoundBuffer) {
 	std::cout << "DLL import for GameUpdateSound() doesn't work.\n";
@@ -255,6 +261,7 @@ void GameUpdateSoundStub (game_sound_output_buffer *SoundBuffer) {
 // Windows, but it's still pretty rad.
 */
 typedef HRESULT WINAPI direct_sound_create(LPCGUID pcGuideDevice, LPDIRECTSOUND *ppDS, LPUNKNOWN pUnkOuter);
+
 
 //This function will be for opening BMP files
 GET_BMP_IMAGE_DATA(GetBmpImageData) {
@@ -522,7 +529,7 @@ int CALLBACK WinMain(
 	// HIDE COMMAND PROMPT (we'll only do this when we ship)
 	// ---------------
 	// ---------------
-	/*
+	
 	// MinGW doesn't get rid of the CMD console even if the application is in a WINMAIN function,
 	// so we have to do some extra stuff to get rid of the console.
 	
@@ -535,18 +542,23 @@ int CALLBACK WinMain(
 	if(CanGetConsoleWindow) {
 		GetConsoleWindow_ = GetConsoleWindow;
 	}
-	ShowWindow(GetConsoleWindow(), SW_SHOW);
+	ShowWindow(GetConsoleWindow(), SW_HIDE);
 	
 	// WINDOWS 98 HIDE CONSOLE
 	::SetConsoleTitle( "ConsoleWindow" ); 
 	HWND ConsoleWindow = ::FindWindow( NULL, "ConsoleWindow" );
 	ShowWindow(ConsoleWindow, SW_HIDE);
-	*/
+	
 	
 	// Filenames for hot reloading
 	char SourceGameCodeDLLFullPath[MAX_PATH] = "C:\\Users\\goken\\cppProjects\\HandmadeHero\\ScreenTest.exe";
 	char TempGameCodeDLLFullPath[MAX_PATH] = "C:\\Users\\goken\\cppProjects\\HandmadeHero\\ScreenTest_temp.exe";
 	
+	
+	// Declare a function pointer to a game_update_and_render type function
+	game_draw_text *GameDrawText;
+	// Point that function pointer to our fake GameUpdateAndRenderStub function
+	GameDrawText = &GameDrawTextStub;
 	
 	// Declare a function pointer to a game_update_and_render type function
 	game_update_and_render *GameUpdateAndRender;
@@ -1059,6 +1071,7 @@ int CALLBACK WinMain(
 			GameCodeDLL = LoadLibraryA("ScreenTestGameCode_temp.dll");
 			if(GameCodeDLL){
 				// Re-point that function pointer to the function in our DLL
+				GameDrawText = (game_draw_text *)GetProcAddress(GameCodeDLL, "GameDrawText");
 				GameUpdateAndRender = (game_update_and_render *)GetProcAddress(GameCodeDLL, "GameUpdateAndRender");
 				GameUpdateSound = (game_update_sound *)GetProcAddress(GameCodeDLL, "GameUpdateSound");
 			}
@@ -1109,6 +1122,8 @@ int CALLBACK WinMain(
 			POINT StartCursorPosition = OldCursorPosition;
 			int MouseDeltaX = 0;
 			int MouseDeltaY = 0;
+			
+			double FramesPerSecond = 0;
 			
 			// START THE PROGRAM LOOP
 			// ------------------------------
@@ -1198,6 +1213,7 @@ int CALLBACK WinMain(
 								} else if (VKCode == 'Q') {
 								} else if (VKCode == 'E') {
 								} else if (VKCode == VK_UP) {
+									ShowWindow(ConsoleWindow, SW_HIDE);
 									if(WasDown) {
 										Controller.MoveUp=false;
 										KeyboardInUse=false;
@@ -1560,6 +1576,12 @@ int CALLBACK WinMain(
 						GameUpdateAndRender(&GameBuffer, &GameState, &Controller, &GameSoundBuffer, &GameMemory);						
 					}
 					
+					if(FramesPerSecond) {						
+						char FPSBuffer[256];
+						sprintf(FPSBuffer, "FPS %f", FramesPerSecond);
+						GameDrawText(FPSBuffer, 10, 10, &GameBuffer);
+					}
+					
 					/* FILL THE SOUND BUFFER WITH OUR GENERATED SOUND
 					// This is the point where we FINALLY write our sound data to the actual sound card,
 					// (albeit indirectly through Windows's fake Sound Card memory)
@@ -1633,8 +1655,8 @@ int CALLBACK WinMain(
 				
 				// FPS Tracking
 				real32 SecondsPerFrame = Win32GetSecondsElapsed(LastCounter,Win32GetWallClock());
-				double FramesPerSecond = 1.0f/ SecondsPerFrame;
-				std::cout << "FPS: " << FramesPerSecond << "\n";
+				FramesPerSecond = 1.0f/ SecondsPerFrame;
+				//std::cout << "FPS: " << FramesPerSecond << "\n";
 				LARGE_INTEGER EndCounter = Win32GetWallClock();
 				LastCounter = EndCounter;
 				

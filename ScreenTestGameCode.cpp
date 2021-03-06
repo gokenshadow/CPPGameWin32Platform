@@ -26,6 +26,13 @@ typedef double real64;
 #include "debugbreak.h"
 
 
+
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
+#define STB_TRUETYPE_IMPLEMENTATION
+#include "stb_truetype.h"
+
 #define DATA_OFFSET_OFFSET 0x000A
 #define WIDTH_OFFSET 0x0012
 #define HEIGHT_OFFSET 0x0016
@@ -36,6 +43,8 @@ typedef double real64;
 #define MAX_NUMBER_OF_COLORS 0
 #define ALL_COLORS_REQUIRED 0
 #define BACKGROUND_COLOR 0x00000000
+
+static uint8 *FontData;
 
 void blah(){
 	std::cout << "blah\n";
@@ -121,6 +130,66 @@ void DrawImage (bmp_image_data ImageData, int ImageX, int ImageY, game_offscreen
 		}
 }
 
+uint8 *GetFont(const char *Filename) {
+	if(FILE *filePointer = fopen(Filename, "rb")) {
+		fseek(filePointer, 0, SEEK_END); // seek to end of file
+		uint32 FontSize = ftell(filePointer); // get current file pointer
+		fseek(filePointer, 0, SEEK_SET); // seek back to beginning of file
+		uint8* FontData = (uint8 *)malloc(FontSize);
+		fread(FontData, FontSize, 1, filePointer);
+		
+		return FontData;
+	}
+}
+
+void DrawLetter (const char Letter, int X, int Y, game_offscreen_buffer *ScreenBuffer) {
+	
+	stbtt_fontinfo Font;
+	
+	stbtt_InitFont(&Font, FontData, stbtt_GetFontOffsetForIndex(FontData, 0));
+	
+	int LetterWidth, LetterHeight;
+	uint8 *MonoBitmap = stbtt_GetCodepointBitmap(&Font, 0,stbtt_ScaleForPixelHeight(&Font, 30.0f), Letter, &LetterWidth, &LetterHeight, 0,0);
+	
+	bmp_image_data LetterImage;
+	
+	LetterImage.ImageData = (uint8 *)malloc(LetterWidth*LetterHeight*4);
+	memset(LetterImage.ImageData, 0xFFFFFFFF, LetterWidth*LetterHeight*4);
+	LetterImage.Size = LetterWidth*LetterHeight*4;
+	LetterImage.Width = LetterWidth;
+	LetterImage.Height = LetterHeight;
+	LetterImage.BytesPerPixel = 4;
+
+	uint8 *Source = MonoBitmap;
+	uint8 *DestRow = (uint8*)LetterImage.ImageData;
+	
+	uint32 Pitch = LetterWidth*4;
+	for(uint32 Y =0; Y < LetterHeight; Y++) {
+		uint32 *Dest = (uint32 *)DestRow;
+		for(uint32 X=0; X < LetterWidth; X++) {
+			uint8 Alpha = *Source++;
+			*Dest++ = ((Alpha << 24)|
+					   (Alpha << 16)|
+					   (Alpha << 8)|
+					   (Alpha << 0));
+		}
+		DestRow += Pitch;
+	}
+	DrawImage(LetterImage, X, Y, ScreenBuffer);
+	
+}
+
+
+extern "C" void GameDrawText (const char *Text, int X, int Y, game_offscreen_buffer *ScreenBuffer) {
+	int TextSize = strlen(Text);
+	int XOffset = X;
+	for(int i = 0; i < TextSize-1; i++) {
+		DrawLetter(Text[i], XOffset, Y, ScreenBuffer);
+		XOffset+=15;
+	}
+}
+
+
 extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_state *GameState,
 									game_controller_input *Controller, game_sound_output_buffer *SoundBuffer,
 									game_memory *Memory) {
@@ -139,19 +208,73 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_state *G
 	static bmp_image_data Image8;
 	static bmp_image_data Image9;
 	static bmp_image_data Image10;
-
-	if(!Image0.Width) {
+	static bmp_image_data ImageText;
+	static bmp_image_data LetterTest;
+	static bmp_image_data ImageLoading;
+	static bmp_image_data PngTest;
+	static bool LoadingShowing = false;
+	static void *WholeFile;
+	DrawImage(ImageLoading, 0, 0, Buffer);
+	
+	if(!ImageLoading.Width) {
+		ImageLoading = Memory->GetBmpImageData("images\\loading.bmp");
+	}
+	
+	if(LoadingShowing&&!Image0.Width) {
+		Image0.Width = 3;
+		int x,y,n;
+		unsigned char *data = stbi_load("images\\01.png", &x, &y, &n, 0);
+		PngTest.Width = x;
+		PngTest.Height = y;
+		PngTest.BytesPerPixel=n;
+		PngTest.Size = x*y*n;
+		PngTest.ImageData = data;
+		GameDrawText("01.bmp", 0, 0, Buffer);
 		BigAnimeImage = Memory->GetBmpImageData("images\\Brand-New-Animal.bmp");
+		GameDrawText("01.bmp", 0, 0, Buffer);
+		if(!Image0.Width) {
+			GameDrawText("01.bmp", 0, 0, Buffer);
+		}
 		Image0 = Memory->GetBmpImageData("images\\00.bmp");
+		if(!Image1.Width) {
+			GameDrawText("01.bmp", 0, 0, Buffer);
+		}
 		Image1 = Memory->GetBmpImageData("images\\01.bmp");
+		if(!Image2.Width) {
+			GameDrawText("02.bmp", 0, 0, Buffer);
+		}
 		Image2 = Memory->GetBmpImageData("images\\02.bmp");
+		if(!Image3.Width) {
+			GameDrawText("03.bmp", 0, 0, Buffer);
+		}
 		Image3 = Memory->GetBmpImageData("images\\03.bmp");
+		if(!Image4.Width) {
+			GameDrawText("04.bmp", 0, 0, Buffer);
+		}
 		Image4 = Memory->GetBmpImageData("images\\04.bmp");
+		if(!Image5.Width) {
+			GameDrawText("05.bmp", 0, 0, Buffer);
+		}
 		Image5 = Memory->GetBmpImageData("images\\05.bmp");
+		if(!Image6.Width) {
+			GameDrawText("06.bmp", 0, 0, Buffer);
+		}
 		Image6 = Memory->GetBmpImageData("images\\06.bmp");
+		if(!Image7.Width) {
+			GameDrawText("07.bmp", 0, 0, Buffer);
+		}
 		Image7 = Memory->GetBmpImageData("images\\07.bmp");
+		if(!Image8.Width) {
+			GameDrawText("08.bmp", 0, 0, Buffer);
+		}
 		Image8 = Memory->GetBmpImageData("images\\08.bmp");
+		if(!Image9.Width) {
+			GameDrawText("09.bmp", 0, 0, Buffer);
+		}
 		Image9 = Memory->GetBmpImageData("images\\09.bmp");
+		if(!Image10.Width) {
+			GameDrawText("10.bmp", 0, 0, Buffer);
+		}
 		Image10 = Memory->GetBmpImageData("images\\10.bmp");
 	}
 
@@ -163,6 +286,47 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_state *G
 		GameState->YSpeed = 2;
 		GameState->IsInitialized = true;
 		GameState->ToneLevel = 256;
+		
+		FontData = GetFont("arialbd.ttf");
+		
+		if(FILE *filePointer = fopen("arialbd.ttf", "rb")) {
+			/*fseek(filePointer, 0, SEEK_END); // seek to end of file
+			uint32 FontSize = ftell(filePointer); // get current file pointer
+			fseek(filePointer, 0, SEEK_SET); // seek back to beginning of file
+			uint8* FontData = (uint8 *)malloc(FontSize);
+			fread(FontData, FontSize, 1, filePointer);*/
+			
+			stbtt_fontinfo Font;
+			
+			stbtt_InitFont(&Font, FontData, stbtt_GetFontOffsetForIndex(FontData, 0));
+			
+			int w, h;
+			uint8 *MonoBitmap = stbtt_GetCodepointBitmap(&Font, 0,stbtt_ScaleForPixelHeight(&Font, 30.0f), '&', &w, &h, 0,0);
+			
+			
+			LetterTest.ImageData = (uint8 *)malloc(w*h*4);
+			memset(LetterTest.ImageData, 0xFFFFFFFF, w*h*4);
+			LetterTest.Size = w*h*4;
+			LetterTest.Width = w;
+			LetterTest.Height = h;
+			LetterTest.BytesPerPixel = 4;
+		
+			uint8 *Source = MonoBitmap;
+			uint8 *DestRow = (uint8*)LetterTest.ImageData;
+			
+			uint32 Pitch = w*4;
+			for(uint32 Y =0; Y < h; Y++) {
+				uint32 *Dest = (uint32 *)DestRow;
+				for(uint32 X=0; X < w; X++) {
+					uint8 Alpha = *Source++;
+					*Dest++ = ((Alpha << 24)|
+							   (Alpha << 16)|
+							   (Alpha << 8)|
+							   (Alpha << 0));
+				}
+				DestRow += Pitch;
+			}
+		}
 		
 		//Memory->ClearBmpImageData(Image1);		
 
@@ -287,7 +451,11 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_state *G
 	//std::cout << "ImageX:" << Buffer->Width - Image1.Width << "\n";
 	//std::cout << "ImageY:" << ImageY << "\n";
 	int YExtra = 0;
-	int XExtra = 0;
+	int XExtra = 0;	
+	if(!LoadingShowing) {
+		GameDrawText("Please wait for the program to load...2", 20, Buffer->Height/2-50, Buffer);
+		LoadingShowing = true;		
+	}
 	DrawImage(BigAnimeImage, ImageX+XExtra, ImageY+YExtra, Buffer);
 	YExtra += BigAnimeImage.Height/1.5;
 	XExtra += BigAnimeImage.Width;
@@ -323,6 +491,14 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_state *G
 	DrawImage(Image10, ImageX+XExtra, ImageY+YExtra, Buffer);
 	YExtra += Image10.Height/1.5;
 	XExtra += Image10.Width;
+	if(Image10.Width){
+		char FPSBuffer[256];
+		sprintf(FPSBuffer, "X %i", ImageX);
+		GameDrawText(FPSBuffer, 10, 50, Buffer);
+		char FPSBuffer2[256];
+		sprintf(FPSBuffer2, "Y %i", ImageY);
+		GameDrawText(FPSBuffer2, 10, 90, Buffer);
+	}
 	
 	b();
 

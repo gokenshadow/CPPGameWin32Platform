@@ -13,6 +13,13 @@ struct game_offscreen_buffer {
 
 void b();
 
+inline uint32 SafeTruncateSize64(uint64 Value) {
+	//TODO(casey): Defines for maximum values
+	Assert(Value <= 0xFFFFFF);
+	uint32 Result = (uint32)Value;
+	return Result;
+}
+
 struct bmp_pixel {
 	uint8 blue;
 	uint8 green;
@@ -26,6 +33,21 @@ struct bmp_image_data {
 	uint32 Size;
 	uint8 *ImageData;
 };
+
+struct debug_read_file_result {
+	uint32 ContentSize;
+	void *Contents;
+};
+
+#define DEBUG_PLATFORM_FREE_FILE_MEMORY(name) void name(void *Memory)
+typedef DEBUG_PLATFORM_FREE_FILE_MEMORY(debug_platform_free_file_memory);
+
+#define DEBUG_PLATFORM_READ_ENTIRE_FILE(name) debug_read_file_result name(const char *Filename)
+typedef DEBUG_PLATFORM_READ_ENTIRE_FILE(debug_platform_read_entire_file);
+
+#define DEBUG_PLATFORM_WRITE_ENTIRE_FILE(name) bool32 name(const char *Filename, uint32 MemorySize, void *Memory)
+typedef DEBUG_PLATFORM_WRITE_ENTIRE_FILE(debug_platform_write_entire_file);
+
 
 #define GET_BMP_IMAGE_DATA(name) bmp_image_data name(const char *Filename)
 typedef GET_BMP_IMAGE_DATA(get_bmp_image_data);
@@ -98,6 +120,11 @@ struct game_memory {
 	
 	get_bmp_image_data *GetBmpImageData;
 	clear_bmp_image_data *ClearBmpImageData;
+	
+	debug_platform_free_file_memory  *DEBUGPlatformFreeFileMemory;
+	debug_platform_read_entire_file  *DEBUGPlatformReadEntireFile; 
+	debug_platform_write_entire_file *DEBUGPlatformWriteEntireFile;
+	
 };
 
 #define WIN32_HANDMADE_H
