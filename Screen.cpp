@@ -375,6 +375,15 @@ LRESULT CALLBACK Win32MainWindowCallback(
             GlobalRunning = false;
 			PostQuitMessage(0);
         } break;
+		case WM_ACTIVATE:
+        {
+			if(WParam == WA_INACTIVE) {
+				GlobalLockMouse = false;
+			} else {
+				GlobalLockMouse = true;
+			}
+			
+        } break;
         case WM_CLOSE:
         {
             GlobalRunning = false;
