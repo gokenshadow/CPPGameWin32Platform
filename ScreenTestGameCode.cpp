@@ -337,7 +337,7 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_state *G
 	// ---------------
 	// ---------------
 	if(Image0.Width) {
-		int16 ToneVolume = 3000;
+		int16 ToneVolume = 0;
 
 		int WavePeriod = SoundBuffer->SamplesPerSecond/GameState->ToneHz;
 

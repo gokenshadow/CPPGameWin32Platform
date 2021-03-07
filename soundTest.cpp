@@ -131,14 +131,14 @@ int CALLBACK WinMain(
 ) {
 	::ShowWindow(::GetConsoleWindow(), SW_HIDE);
 	::ShowWindow(::GetConsoleWindow(), SW_SHOW);
-	
-	/*HMODULE Gdi32Library = LoadLibraryA("Gdi32.dll");		
+
+	/*HMODULE Gdi32Library = LoadLibraryA("Gdi32.dll");
 	// We will only initialize DirectSound if Windows is able to find the library.
 	if(Gdi32Library){
 		// Get a DirectSound object by grabbing it directly from the dsound DLL
 		StretchDIBits = (stretch_DIBits *)GetProcAddress(Gdi32Library, "StretchDIBits");
 	}*/
-	
+
 	// SET UP THE DIB
 	// ---------------
 	// ---------------
