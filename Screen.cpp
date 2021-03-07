@@ -281,6 +281,7 @@ static bool GlobalRunning;
 static win32_offscreen_buffer GlobalBackBuffer;
 static bool GlobalLockMouse;
 static int64 GlobalPerfCountFrequency;
+static bool GlobalUnhighlighted;
 
 // This function will make it easier to think about what we're doing when
 // we're measuring time.
@@ -704,55 +705,79 @@ int CALLBACK WinMain(
 				// ---------------
 				// ---------------
 				// Black Background
-				uint32 *BlackBackgroundPixel = (uint32*)GlobalBackBuffer.Memory;
-				for(int i = 0; i<(GlobalBackBuffer.Width*GlobalBackBuffer.Height); i++) {
-					*BlackBackgroundPixel++ = 0;
+				if(GlobalLockMouse) {
+						uint32 *BlackBackgroundPixel = (uint32*)GlobalBackBuffer.Memory;
+					for(int i = 0; i<(GlobalBackBuffer.Width*GlobalBackBuffer.Height); i++) {
+						*BlackBackgroundPixel++ = 0;
+					}
+					
+					XOffset -= MouseDeltaX;
+					YOffset -= MouseDeltaY;
+					
+					// Images
+					int XExtra = 0;
+					int YExtra = 0;
+					DrawImage(BigAnimeImage, XOffset, YOffset, &GlobalBackBuffer);
+					YExtra += BigAnimeImage.Height/1.5;
+					XExtra += BigAnimeImage.Width;
+					DrawImage(Image0, XOffset+XExtra, YOffset+YExtra, &GlobalBackBuffer);
+					YExtra += Image0.Height/1.5;
+					XExtra += Image0.Width;
+					DrawImage(Image1, XOffset+XExtra, YOffset+YExtra, &GlobalBackBuffer);
+					YExtra += Image1.Height/1.5;
+					XExtra += Image1.Width;
+					DrawImage(Image2, XOffset+XExtra, YOffset+YExtra, &GlobalBackBuffer);
+					YExtra += Image2.Height/1.5;
+					XExtra += Image2.Width;
+					DrawImage(Image2, XOffset+XExtra, YOffset+YExtra, &GlobalBackBuffer);
+					YExtra += Image3.Height/1.5;
+					XExtra += Image3.Width;
+					DrawImage(Image4, XOffset+XExtra, YOffset+YExtra, &GlobalBackBuffer);
+					YExtra += Image4.Height/1.5;
+					XExtra += Image4.Width;
+					DrawImage(Image5, XOffset+XExtra, YOffset+YExtra, &GlobalBackBuffer);
+					YExtra += Image5.Height/1.5;
+					XExtra += Image5.Width;
+					DrawImage(Image6, XOffset+XExtra, YOffset+YExtra, &GlobalBackBuffer);
+					YExtra += Image6.Height/1.5;
+					XExtra += Image6.Width;
+					DrawImage(Image7, XOffset+XExtra, YOffset+YExtra, &GlobalBackBuffer);
+					YExtra += Image7.Height/1.5;
+					XExtra += Image7.Width;
+					DrawImage(Image8, XOffset+XExtra, YOffset+YExtra, &GlobalBackBuffer);
+					YExtra += Image8.Height/1.5;
+					XExtra += Image9.Width;
+					DrawImage(Image9, XOffset+XExtra, YOffset+YExtra, &GlobalBackBuffer);
+					YExtra += Image9.Height/1.5;
+					XExtra += Image9.Width;
+					DrawImage(Image10, XOffset+XExtra, YOffset+YExtra, &GlobalBackBuffer);
+					YExtra += Image10.Height/1.5;
+					XExtra += Image10.Width;
+					DrawImage(waffle, XOffset+XExtra, YOffset+YExtra, &GlobalBackBuffer);
+					
 				}
 				
-				XOffset -= MouseDeltaX;
-				YOffset -= MouseDeltaY;
-				
-				// Images
-				int XExtra = 0;
-				int YExtra = 0;
-				DrawImage(BigAnimeImage, XOffset, YOffset, &GlobalBackBuffer);
-				YExtra += BigAnimeImage.Height/1.5;
-				XExtra += BigAnimeImage.Width;
-				DrawImage(Image0, XOffset+XExtra, YOffset+YExtra, &GlobalBackBuffer);
-				YExtra += Image0.Height/1.5;
-				XExtra += Image0.Width;
-				DrawImage(Image1, XOffset+XExtra, YOffset+YExtra, &GlobalBackBuffer);
-				YExtra += Image1.Height/1.5;
-				XExtra += Image1.Width;
-				DrawImage(Image2, XOffset+XExtra, YOffset+YExtra, &GlobalBackBuffer);
-				YExtra += Image2.Height/1.5;
-				XExtra += Image2.Width;
-				DrawImage(Image2, XOffset+XExtra, YOffset+YExtra, &GlobalBackBuffer);
-				YExtra += Image3.Height/1.5;
-				XExtra += Image3.Width;
-				DrawImage(Image4, XOffset+XExtra, YOffset+YExtra, &GlobalBackBuffer);
-				YExtra += Image4.Height/1.5;
-				XExtra += Image4.Width;
-				DrawImage(Image5, XOffset+XExtra, YOffset+YExtra, &GlobalBackBuffer);
-				YExtra += Image5.Height/1.5;
-				XExtra += Image5.Width;
-				DrawImage(Image6, XOffset+XExtra, YOffset+YExtra, &GlobalBackBuffer);
-				YExtra += Image6.Height/1.5;
-				XExtra += Image6.Width;
-				DrawImage(Image7, XOffset+XExtra, YOffset+YExtra, &GlobalBackBuffer);
-				YExtra += Image7.Height/1.5;
-				XExtra += Image7.Width;
-				DrawImage(Image8, XOffset+XExtra, YOffset+YExtra, &GlobalBackBuffer);
-				YExtra += Image8.Height/1.5;
-				XExtra += Image9.Width;
-				DrawImage(Image9, XOffset+XExtra, YOffset+YExtra, &GlobalBackBuffer);
-				YExtra += Image9.Height/1.5;
-				XExtra += Image9.Width;
-				DrawImage(Image10, XOffset+XExtra, YOffset+YExtra, &GlobalBackBuffer);
-				YExtra += Image10.Height/1.5;
-				XExtra += Image10.Width;
-				DrawImage(waffle, XOffset+XExtra, YOffset+YExtra, &GlobalBackBuffer);
-				
+				// DISPLAY BUFFER IN WINDOW
+				// ---------------
+				// ---------------
+				if(GlobalLockMouse) {
+					RECT ClientRect;
+
+					GetClientRect(Window, &ClientRect);
+					
+					WindowWidth = ClientRect.right - ClientRect.left;
+					WindowHeight = ClientRect.bottom - ClientRect.top;
+
+					StretchDIBits(DeviceContext,
+									0, 0, WindowWidth, WindowHeight,
+									0, 0, WindowWidth, WindowHeight,
+									PointerToBackBuffer->Memory,
+									&PointerToBackBuffer->Info,
+									DIB_RGB_COLORS,
+									SRCCOPY
+									);	
+				}
+						
 				// LIMIT THE FPS (TODO: explain)
 				// ---------------
 				// ---------------
@@ -785,25 +810,6 @@ int CALLBACK WinMain(
 				//std::cout << "FPS: " << FramesPerSecond << "\n";
 				LARGE_INTEGER EndCounter = Win32GetWallClock();
 				LastCounter = EndCounter;
-				
-				// DISPLAY BUFFER IN WINDOW
-				// ---------------
-				// ---------------
-				RECT ClientRect;
-
-				GetClientRect(Window, &ClientRect);
-				
-				WindowWidth = ClientRect.right - ClientRect.left;
-				WindowHeight = ClientRect.bottom - ClientRect.top;
-
-				StretchDIBits(DeviceContext,
-								0, 0, WindowWidth, WindowHeight,
-								0, 0, WindowWidth, WindowHeight,
-								PointerToBackBuffer->Memory,
-								&PointerToBackBuffer->Info,
-								DIB_RGB_COLORS,
-								SRCCOPY
-								);
             }
         } else {
             // TODO(Casey): Logging
