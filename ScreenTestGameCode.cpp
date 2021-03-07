@@ -215,6 +215,7 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_state *G
 	static bool LoadingShowing = false;
 	static void *WholeFile;
 	DrawImage(ImageLoading, 0, 0, Buffer);
+	static bool ImagesLoaded = false;
 	
 	if(!ImageLoading.Width) {
 		ImageLoading = Memory->GetBmpImageData("images\\loading.bmp");
@@ -332,37 +333,34 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_state *G
 
 	}
 
-
 	// GENERATE OUR SOUND
 	// ---------------
 	// ---------------
+	if(Image0.Width) {
+		int16 ToneVolume = 3000;
 
-	int16 ToneVolume = 3000;
+		int WavePeriod = SoundBuffer->SamplesPerSecond/GameState->ToneHz;
 
-	int WavePeriod = SoundBuffer->SamplesPerSecond/GameState->ToneHz;
+		int16 *SampleOut = SoundBuffer->Samples;
 
-	int16 *SampleOut = SoundBuffer->Samples;
+		for(int SampleIndex=0; SampleIndex < SoundBuffer->SampleCount; ++SampleIndex) {
+			real32 SineValue = sinf(GameState->tSine);
+			int16 SampleValue = (int16)(SineValue * ToneVolume);
 
-	for(int SampleIndex=0; SampleIndex < SoundBuffer->SampleCount; ++SampleIndex) {
-		real32 SineValue = sinf(GameState->tSine);
-		int16 SampleValue = (int16)(SineValue * ToneVolume);
+			*SampleOut++ = SampleValue;
+			*SampleOut++ = SampleValue;
 
-		*SampleOut++ = SampleValue;
-		*SampleOut++ = SampleValue;
+			GameState->tSine += ((2.0f*Pi32) / (real32)WavePeriod)*1.0f;
 
-		GameState->tSine += ((2.0f*Pi32) / (real32)WavePeriod)*1.0f;
-
-		if(GameState->tSine > 2.0f*Pi32) {
-			GameState->tSine -= 2.0f*Pi32;
-		}
+			if(GameState->tSine > 2.0f*Pi32) {
+				GameState->tSine -= 2.0f*Pi32;
+			}
+		}		
 	}
 
 	// RENDER A WEIRD GRADIENT THING
 	// ---------------
 	// ---------------
-
-	
-	
 	/*uint8 *Row = (uint8*)Buffer->Memory;
 	for(int Y = 0; Y<Buffer->Height; ++Y){
 		uint32 *Pixel = (uint32 *)Row;

@@ -20,6 +20,7 @@ typedef double real64;
 #define Pi32 3.14159265359f
 #include <math.h>
 #include <stdio.h>
+#include <iostream>
 
 // This will allow you to make windows create a window for you
 #include <windows.h>
@@ -85,6 +86,11 @@ LRESULT CALLBACK Win32MainWindowCallback(HWND Window, UINT Message, WPARAM WPara
         } break;
         case WM_DESTROY:
         {
+			GlobalSoundBuffer->Stop();
+			// Freeze for a second to let the sound buffer clear itself
+			// if we don't do this, the sound will sound choppy for a split
+			// second the next time we start the program
+			Sleep(50);
             GlobalRunning = false;
 			PostQuitMessage(0);
         } break;
@@ -94,6 +100,11 @@ LRESULT CALLBACK Win32MainWindowCallback(HWND Window, UINT Message, WPARAM WPara
         } break;
         case WM_CLOSE:
         {
+			GlobalSoundBuffer->Stop();
+			// Freeze for a second to let the sound buffer clear itself
+			// if we don't do this, the sound will sound choppy for a split
+			// second the next time we start the program
+			Sleep(50);
             GlobalRunning = false;
             PostQuitMessage(0);
         } break;
@@ -186,6 +197,17 @@ int CALLBACK WinMain(
 		// If we succed at opening the Windows window, we will start initializing all our
 		// sound stuff
         if(Window){
+			bool IsWindowsXPOrHigher = true;
+			OSVERSIONINFO osvi;
+			ZeroMemory(&osvi, sizeof(OSVERSIONINFO));
+			osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
+			GetVersionEx(&osvi);
+			printf("Windows version: %u.%u\n", osvi.dwMajorVersion, osvi.dwMinorVersion);
+			if(osvi.dwMajorVersion>5) {
+				IsWindowsXPOrHigher = true;
+			} else {
+				IsWindowsXPOrHigher = false;
+			}
 			int Framerate = 60;
 			double TargetSecondsPerFrame = 1.0f / (double)Framerate;		
 
@@ -267,7 +289,17 @@ int CALLBACK WinMain(
 			// the higher quality your sound will be.
 			// We'll set our sound's SamplesPerSecond to 48000hz, since that's the standard for high
 			// quality audio*/
-			int SamplesPerSecond = 48000;
+			
+			// If Windows 98, lower quality sound 
+			
+			int SamplesPerSecond;
+			if(IsWindowsXPOrHigher) {
+				SamplesPerSecond = 48000;
+			} else {
+				SamplesPerSecond = 22050;				
+			}
+			std::cout << "SamplesPerSecond" << SamplesPerSecond << "\n";
+			
 			
 			/* Each sample is a particular height at a particular time. That height
 			// will represent the volume of that sound at that time. The BytesPerSample is how 
@@ -283,12 +315,17 @@ int CALLBACK WinMain(
 			
 			/* SoundBufferSize = how big we want our SoundBuffer to be. We are going to make it as big as 
 			// one second of sound.*/
-			DWORD SoundBufferSize = SamplesPerSecond*BytesPerSample;
+			DWORD SoundBufferSize;
+			if(IsWindowsXPOrHigher) {
+				SoundBufferSize = SamplesPerSecond*BytesPerSample;
+			} else {
+				SoundBufferSize = SamplesPerSecond*BytesPerSample*2;
+			}
 			
 			/* There is always some variability in the timing of the actual hardware we're writing to, so
 			// we're going to add a small amount of bytes that will account for that variabliity and
 			// prevent it from messing with our sound. We'll call these bytes the SafetyBytes.*/
-			DWORD SafetyBytes = (SamplesPerSecond*BytesPerSample / Framerate) / 0.5;
+			DWORD SafetyBytes = (SamplesPerSecond*BytesPerSample);
 			
 			/* Alright, now we can import the library.
 			// Instead of importing the DirectSound Lib file and linking it, which would be annoying 
@@ -311,7 +348,7 @@ int CALLBACK WinMain(
 				// into the sound card for you.*/	
 				LPDIRECTSOUND DirectSound;
 				if(DirectSoundCreate && SUCCEEDED(DirectSoundCreate(0, &DirectSound, 0))) {
-					
+					//std::cout << "blah\n";
 					// Set up the format of the sound
 					WAVEFORMATEX WaveFormat = {};
 					WaveFormat.wFormatTag = WAVE_FORMAT_PCM;
@@ -482,7 +519,7 @@ int CALLBACK WinMain(
 			  beyond it.
 			*/
 			
-						
+			
 			// Alright, let's shove these pointers into the Lock method, and get our
 			// SoundBuffer address, so we can clear the whole thing
 			if(SUCCEEDED(GlobalSoundBuffer->Lock(0, SoundBufferSize, &Region1, &Region1Size, &Region2, &Region2Size, 0 ))) {
@@ -502,7 +539,7 @@ int CALLBACK WinMain(
 			
 			// Now we can start playing the sound knowing for sure that it won't 
 			// make random noises because of uncleared data.
-			GlobalSoundBuffer->Play(0, 0, DSBPLAY_LOOPING);	
+			GlobalSoundBuffer->Play(0, 0, DSBPLAY_LOOPING);
 			
 			/* ALLOCATE PRE-WRITE SOUND GENERATION MEMORY FOR SOUND BUFFER
 			// This is the memory we are going to use to generate some of our own sound before 
@@ -530,9 +567,23 @@ int CALLBACK WinMain(
 			// ------------------------------
 			// ------------------------------
 			// ------------------------------
+			bool SoundPlaying = false;
             GlobalRunning = true;
+			int Win98WaitTime = 4000;
+			float Volume = 1.0f;
+			if(!IsWindowsXPOrHigher) {
+				Volume = 0;
+			}
 			while(GlobalRunning){ 
-									
+				if(Win98WaitTime > 0) {
+					Win98WaitTime--;
+				} else {
+					Volume = 1.0f;
+				}
+				if(SoundIsValid==true&&SoundPlaying==false) {
+					SoundPlaying=true;					
+				}
+				
 				// HANDLE WINDOWS MESSAGES
 				// ---------------
 				// ---------------
@@ -560,6 +611,11 @@ int CALLBACK WinMain(
 							if(WasDown != IsDown) {
 								if (VKCode == VK_ESCAPE) {
 									if(IsDown) {
+										GlobalSoundBuffer->Stop();
+										// Freeze for a second to let the sound buffer clear itself
+										// if we don't do this, the sound will sound choppy for a split
+										// second the next time we start the program
+										Sleep(50);
 										GlobalRunning = false;										
 									}
 								} 
@@ -748,6 +804,7 @@ int CALLBACK WinMain(
 					
 					bool32 AudioCardIsLowLatency = SafeWriteCursor < ExpectedFrameBoundaryByte;
 					
+					//std::cout << "AudioCardIsLowLatency:" << AudioCardIsLowLatency << "\n\n";
 					// TargetCursor represents where we will END when we lock data in the SoundBuffer
 					DWORD TargetCursor = 0;
 					if(AudioCardIsLowLatency) {
@@ -758,6 +815,7 @@ int CALLBACK WinMain(
 					TargetCursor = TargetCursor % SoundBufferSize;
 					
 					ByteToLock = (RunningSampleIndex*BytesPerSample) % SoundBufferSize;
+					//std::cout << "ByteToLock:" << ByteToLock << "\n";
 					
 					// BytesToWrite is the variable we will use to calculate how we long we will move 
 					// until we STOP in the SoundBuffer, so it will be calculated using the TargetCursor.
@@ -773,8 +831,9 @@ int CALLBACK WinMain(
 					// ---------------
 					// ---------------
 					// For this, we'll generate a sine wave
+					int16 ToneVolume = (int)(float)3000.0f*Volume;
+					std::cout << "Tonevolume" << ToneVolume << "\n";
 					int ToneHz = 256;
-					int16 ToneVolume = 3000;
 					static float tSine = 0.0f;
 					int WavePeriod = SamplesPerSecond/ToneHz;
 
@@ -808,6 +867,13 @@ int CALLBACK WinMain(
 						// piece of data, one piece at a time:
 						
 						// First we do it for region1*/
+						
+						int blah = ByteToLock << 8;
+						blah = blah >> 8;
+						
+						//std::cout << "PlayCursor: " << PlayCursor << "\n";
+						//std::cout << "ByteToLock: " << ByteToLock << "\n";
+						//std::cout << "WriteCursor: " << WriteCursor << "\n";
 						DWORD Region1SampleCount = Region1Size/BytesPerSample;
 						int16 *DestSample = (int16 *)Region1;
 						int16 *SourceSample = Samples;
@@ -824,6 +890,7 @@ int CALLBACK WinMain(
 							*DestSample++ = *SourceSample++; // stereo sound right
 							++RunningSampleIndex;
 						}
+						//std::cout << "r:" << RunningSampleIndex << "\n";
 						
 						// The final thing we have to do is Unlock the data we Locked. If we don't do this,
 						// the sound will get messed up right before we start writing again.
@@ -833,6 +900,31 @@ int CALLBACK WinMain(
 				} else {
 					SoundIsValid = false;
 				}
+				
+				PAINTSTRUCT Paint;
+
+				// Get the DeviceContext by pointing Windows's BeginPaint function to that PAINTSTRUCT
+				HDC DeviceContext = BeginPaint(Window, &Paint);
+
+				// RECT is the data format that Windows uses to represent the dimensions of
+				// a window (HWND) that has been opened.
+				// v This command v allocates the amount of space needed for that RECT on the stack
+				RECT ClientRect;
+
+				// v This v is a windows.h command that will get the RECT of any given window
+				// However, instead of RETURNING the value like a normal function would do, this function shoves the value into an already allocated space of memory
+				// (in our case this space of memory would be the one that was created by our ^ RECT ClientRect; ^ command above)
+				GetClientRect(Window, &ClientRect);
+
+				// Now we're getting the width and height (which is all we want) from that RECT
+				int X = Paint.rcPaint.left;
+				int Y = Paint.rcPaint.top;
+				int Width = ClientRect.right - ClientRect.left;
+				int Height = ClientRect.bottom - ClientRect.top;
+				
+				//PatBlt(DeviceContext, X, Y, Width, Height, BLACKNESS);
+				
+				EndPaint(Window, &Paint);
 				
 				LARGE_INTEGER WorkCounter = Win32GetWallClock();
 				double SecondsElapsedForFrame = Win32GetSecondsElapsed(LastCounter, WorkCounter);
